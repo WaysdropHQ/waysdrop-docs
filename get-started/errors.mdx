@@ -95,10 +95,20 @@ API keys must match: `wsp_(live|staging)_[a-f0-9]{64}`
     "statusCode": 429,
     "method": "GET",
     "timestamp": "2026-01-24T12:34:56.789Z",
-    "path": "/api/regions",
-    "url": "https://api.waysdrop.com/api/regions",
+    "path": "/some/path",
+    "url": "https://api.example.com/some/path?x=1",
     "message": "API quota exceeded",
-    "environment": "live"
+    "details": {
+        "message": "API quota exceeded",
+        "error": "Too Many Requests",
+        "quota": {
+            "limit": 123,
+            "remaining": 0,
+            "resetAt": "2026-01-24T12:34:56.789Z",
+            "resetIn": 42
+        }
+    },
+    "environment": "staging"
 }
 ```
 
