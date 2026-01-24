@@ -1,0 +1,476 @@
+# Webhooks
+
+Waysdrop sends webhooks for key order and delivery lifecycle events. Webhooks are delivered asynchronously and retried on failure.
+
+## Delivery & signature
+
+Webhook payloads are POSTed to the webhook URL configured for the API key.
+
+### Environments
+
+Webhooks are scoped to the environment of the API key:
+
+- Live: `https://api.waysdrop.com`
+- Staging: `https://staging-api.waysdrop.com`
+
+Configure your webhook URL in the matching dashboard:
+
+- Live: https://api-dashboard.waysdrop.com
+- Staging: https://staging-api-dashboard.waysdrop.com
+
+### Payload
+
+```json
+{
+    "event": "delivery.in.transit",
+    "data": {}
+}
+```
+
+### Headers
+
+- `Content-Type: application/json`
+- `User-Agent: Waysdrop-Webhook/1.0`
+- `X-Webhook-Log-Id: <logId>`
+- `x-waysdrop-signature: <hex signature>`
+
+**Idempotency**
+
+Use `X-Webhook-Log-Id` as an idempotency key. The same event may be retried and delivered more than once; you should safely ignore duplicates by storing processed log IDs.
+
+### Signature
+
+`x-waysdrop-signature` is computed as:
+
+- Algorithm: `sha256`
+- Secret: your API key value (the same string you send in `api-key`)
+- Input: `JSON.stringify({ event, data })`
+
+**Verification example (Node.js)**
+
+```js
+import crypto from "crypto";
+
+export function verifyWaysdropSignature({ apiKey, body, signature }) {
+    const computed = crypto
+        .createHmac("sha256", apiKey)
+        .update(body)
+        .digest("hex");
+    return crypto.timingSafeEqual(
+        Buffer.from(computed),
+        Buffer.from(signature),
+    );
+}
+```
+
+## Your webhook response
+
+Waysdrop treats any successful `2xx` response as “delivered”. Your endpoint should respond quickly (Waysdrop times out at 5 seconds).
+
+**Recommended response**
+
+```json
+{
+    "received": true
+}
+```
+
+Waysdrop stores your response body in the webhook log for debugging (if any).
+
+## Retries and delivery guarantees
+
+Webhooks are delivered asynchronously and retried until one of these happens:
+
+- delivered successfully
+- exhausted retry attempts (max: 10)
+
+**Retry conditions**
+
+- Retries on network errors/timeouts.
+- Retries on `408` and `429`.
+- Retries on all `5xx`.
+- Does not retry for other `4xx` responses.
+
+**Backoff**
+
+- `nextRetryAt` uses exponential backoff: `2^attempts` seconds.
+- A repeat job runs roughly every 60 seconds and attempts retries once `nextRetryAt` is due.
+
+## Webhook events
+
+All timestamps are serialized as ISO strings.
+
+### p2p.delivery.created
+
+```json
+{
+    "event": "p2p.delivery.created",
+    "data": {
+        "status": "string",
+        "trackingId": "string",
+        "deliveryId": "uuid",
+        "p2pDeliveryId": "uuid",
+        "userId": "uuid",
+        "profileId": "uuid",
+        "totalWeight": "number",
+        "totalValue": "number",
+        "costs": {
+            "total": "number",
+            "weight": "number",
+            "urgency": "number",
+            "fleet": "number",
+            "insurance": "number",
+            "base": "number"
+        },
+        "paymentMethodType": "string",
+        "courierSelection": "string",
+        "urgencyType": "string",
+        "origin": {},
+        "destination": {},
+        "createdAt": "2026-01-24T12:34:56.789Z"
+    }
+}
+```
+
+### p2p.delivery.cancelled
+
+```json
+{
+    "event": "p2p.delivery.cancelled",
+    "data": {
+        "trackingId": "string",
+        "deliveryId": "uuid",
+        "p2pDeliveryId": "uuid",
+        "status": "CANCELLED",
+        "canceledAt": "2026-01-24T12:34:56.789Z",
+        "refundAmount": "number | null"
+    }
+}
+```
+
+### delivery.request.accepted
+
+```json
+{
+    "event": "delivery.request.accepted",
+    "data": {
+        "deliveryId": "uuid",
+        "trackingId": "string",
+        "type": "ORDER | P2P",
+        "status": "ACCEPTED",
+        "routeType": "string",
+        "courierProfileId": "uuid",
+        "origin": {},
+        "destination": {},
+        "storeProfileId": "uuid",
+        "storeLocation": {},
+        "orderId": "uuid",
+        "p2pDeliveryId": "uuid"
+    }
+}
+```
+
+### delivery.request.declined
+
+```json
+{
+    "event": "delivery.request.declined",
+    "data": {
+        "deliveryId": "uuid",
+        "trackingId": "string",
+        "type": "ORDER | P2P",
+        "status": "DECLINED",
+        "routeType": "string",
+        "courierProfileId": "uuid",
+        "courierUserId": "uuid",
+        "origin": {},
+        "destination": {},
+        "storeProfileId": "uuid",
+        "storeLocation": {},
+        "orderId": "uuid",
+        "orderNumber": "string",
+        "p2pDeliveryId": "uuid",
+        "refundExpected": {
+            "amount": "number",
+            "currency": "string"
+        }
+    }
+}
+```
+
+### delivery.awaiting.collection
+
+```json
+{
+    "event": "delivery.awaiting.collection",
+    "data": {
+        "deliveryId": "uuid",
+        "trackingId": "string",
+        "type": "ORDER | P2P",
+        "status": "AWAITING_COLLECTION",
+        "routeType": "string",
+        "courierProfileId": "uuid",
+        "origin": {},
+        "destination": {},
+        "proofCode": "string | null",
+        "orderId": "uuid",
+        "storeProfileId": "uuid",
+        "p2pDeliveryId": "uuid",
+        "profileId": "uuid",
+        "updatedAt": "2026-01-24T12:34:56.789Z"
+    }
+}
+```
+
+### delivery.collected
+
+```json
+{
+    "event": "delivery.collected",
+    "data": {
+        "deliveryId": "uuid",
+        "trackingId": "string",
+        "type": "ORDER | P2P",
+        "status": "ORDER_COLLECTED | PACKAGE_COLLECTED",
+        "routeType": "string",
+        "collectedAt": "2026-01-24T12:34:56.789Z",
+        "courierProfileId": "uuid",
+        "courierUserId": "uuid",
+        "origin": {},
+        "destination": {},
+        "deliveryCode": "string | null",
+        "orderId": "uuid",
+        "storeProfileId": "uuid",
+        "p2pDeliveryId": "uuid"
+    }
+}
+```
+
+### delivery.in.transit
+
+```json
+{
+    "event": "delivery.in.transit",
+    "data": {
+        "deliveryId": "uuid",
+        "trackingId": "string",
+        "type": "ORDER | P2P",
+        "status": "IN_TRANSIT",
+        "routeType": "string",
+        "origin": {},
+        "destination": {},
+        "inTransitAt": "2026-01-24T12:34:56.789Z"
+    }
+}
+```
+
+### delivery.delivered
+
+```json
+{
+    "event": "delivery.delivered",
+    "data": {
+        "deliveryId": "uuid",
+        "trackingId": "string",
+        "type": "ORDER | P2P",
+        "status": "DELIVERED",
+        "routeType": "string",
+        "deliveredAt": "2026-01-24T12:34:56.789Z",
+        "courierProfileId": "uuid",
+        "courierUserId": "uuid",
+        "origin": {},
+        "destination": {},
+        "orderId": "uuid",
+        "storeProfileId": "uuid",
+        "p2pDeliveryId": "uuid"
+    }
+}
+```
+
+### delivery.reassignment.created
+
+Emitted when a courier-to-system reassignment is created for one or more deliveries (grouped by `apiKeyId`).
+
+```json
+{
+    "event": "delivery.reassignment.created",
+    "data": {
+        "reassignmentId": "uuid",
+        "type": "string",
+        "status": "string",
+        "fromCourierId": "uuid",
+        "handoverLocation": {},
+        "deliveryIds": ["uuid"],
+        "trackingIds": ["string"],
+        "createdAt": "2026-01-24T12:34:56.789Z"
+    }
+}
+```
+
+### delivery.reassignment.requested
+
+Emitted when the system creates a reassignment request response for a candidate courier (grouped by `apiKeyId`).
+
+```json
+{
+    "event": "delivery.reassignment.requested",
+    "data": {
+        "reassignmentId": "uuid",
+        "status": "string",
+        "type": "string",
+        "courierProfileId": "uuid",
+        "handoverLocation": {},
+        "dominantFleetTypeId": "uuid",
+        "deliveryIds": ["uuid"],
+        "trackingIds": ["string"],
+        "requestedAt": "2026-01-24T12:34:56.789Z"
+    }
+}
+```
+
+### delivery.reassignment.collected
+
+Emitted after reassignment handover proof is validated (grouped by `apiKeyId`).
+
+```json
+{
+    "event": "delivery.reassignment.collected",
+    "data": {
+        "reassignmentId": "uuid",
+        "type": "string",
+        "status": "string",
+        "handoverAt": "2026-01-24T12:34:56.789Z",
+        "handoverLocation": {},
+        "proofImage": "string | null",
+        "fromCourierId": "uuid | null",
+        "toCourierId": "uuid | null",
+        "deliveries": [
+            {
+                "deliveryId": "uuid",
+                "trackingId": "string",
+                "type": "ORDER | P2P",
+                "status": "string",
+                "routeType": "string",
+                "origin": {},
+                "destination": {}
+            }
+        ]
+    }
+}
+```
+
+### delivery.reassignment.direct_assigned
+
+Emitted when an employer directly reassigns deliveries to an employee (no request/proof flow).
+
+```json
+{
+    "event": "delivery.reassignment.direct_assigned",
+    "data": {
+        "deliveryId": "uuid",
+        "trackingId": "string",
+        "type": "ORDER | P2P",
+        "status": "string",
+        "routeType": "string",
+        "reassignmentType": "string",
+        "fromCourierId": "uuid",
+        "toCourierId": "uuid",
+        "assignedAt": "2026-01-24T12:34:56.789Z"
+    }
+}
+```
+
+### order.requested
+
+Emitted when a store receives a new order request.
+
+```json
+{
+    "event": "order.requested",
+    "data": {
+        "order": {},
+        "storeProfileId": "uuid",
+        "storeUserId": "uuid"
+    }
+}
+```
+
+### order.created
+
+```json
+{
+    "event": "order.created",
+    "data": {
+        "orderId": "uuid",
+        "orderNumber": "string",
+        "deliveryId": "uuid",
+        "trackingId": "string",
+        "userId": "uuid",
+        "profileId": "uuid",
+        "amount": "number",
+        "source": "string",
+        "status": "AWAITING_CONFIRMATION"
+    }
+}
+```
+
+### order.confirmed
+
+```json
+{
+    "event": "order.confirmed",
+    "data": {
+        "orderId": "uuid",
+        "orderNumber": "string",
+        "deliveryId": "uuid",
+        "trackingId": "string | null",
+        "storeProfileId": "uuid",
+        "storeUserId": "uuid",
+        "storeLocation": {},
+        "status": "CONFIRMED",
+        "confirmedAt": "2026-01-24T12:34:56.789Z"
+    }
+}
+```
+
+### order.declined
+
+```json
+{
+    "event": "order.declined",
+    "data": {
+        "orderId": "uuid",
+        "orderNumber": "string",
+        "deliveryId": "uuid",
+        "trackingId": "string | null",
+        "storeProfileId": "uuid",
+        "storeUserId": "uuid",
+        "storeLocation": {},
+        "status": "DECLINED",
+        "declinedAt": "2026-01-24T12:34:56.789Z",
+        "refundExpected": {
+            "amount": "number",
+            "currency": "string"
+        }
+    }
+}
+```
+
+### order.cancelled
+
+```json
+{
+    "event": "order.cancelled",
+    "data": {
+        "orderId": "uuid",
+        "orderNumber": "string",
+        "trackingId": "string",
+        "deliveryId": "uuid",
+        "userId": "uuid",
+        "profileId": "uuid",
+        "refundAmount": "number | null",
+        "status": "CANCELLED",
+        "canceledAt": "2026-01-24T12:34:56.789Z"
+    }
+}
+```

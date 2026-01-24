@@ -1,0 +1,94 @@
+# API Keys
+
+All endpoints in the API module require an API key.
+
+## Environments
+
+Waysdrop has two environments:
+
+- **Live**: `https://api.waysdrop.com`
+- **Staging**: `https://staging-api.waysdrop.com`
+
+API keys are environment-specific. Grab your key from:
+
+- **Live dashboard**: https://api-dashboard.waysdrop.com
+- **Staging dashboard**: https://staging-api-dashboard.waysdrop.com
+
+## Authentication
+
+Send your API key using the `api-key` header:
+
+```bash
+curl -X GET "https://api.waysdrop.com/api/regions?search=lagos" \
+  -H "api-key: wsp_live_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+```
+
+### API key format
+
+API keys must match this format:
+
+- `wsp_live_<64 hex chars>` or `wsp_staging_<64 hex chars>`
+
+If the header is missing or malformed, the request returns `401 Unauthorized`.
+
+## Funding your wallet
+
+On **staging**, you can fund your wallet in the dev mobile app using this test card:
+
+```text
+Card number: 4084 0840 8408 4081
+Expiry: 11/26
+CVV: 408
+```
+
+On **live**, fund your wallet using a real card or a dedicated virtual account.
+
+## Error responses
+
+All errors use the standard envelope described in [Errors](errors.mdx).
+
+### Missing API key
+
+```json
+{
+  "statusCode": 401,
+  "method": "GET",
+  "timestamp": "2026-01-24T12:34:56.789Z",
+  "path": "/api/regions",
+  "url": "https://api.waysdrop.com/api/regions",
+  "message": "API key is required",
+  "environment": "live"
+}
+```
+
+### Invalid API key format
+
+```json
+{
+  "statusCode": 401,
+  "method": "GET",
+  "timestamp": "2026-01-24T12:34:56.789Z",
+  "path": "/api/regions",
+  "url": "https://api.waysdrop.com/api/regions",
+  "message": "Invalid API key format",
+  "environment": "live"
+}
+```
+
+### Rate limit / quota exceeded
+
+```json
+{
+  "statusCode": 429,
+  "method": "GET",
+  "timestamp": "2026-01-24T12:34:56.789Z",
+  "path": "/api/regions",
+  "url": "https://api.waysdrop.com/api/regions",
+  "message": "API quota exceeded",
+  "environment": "live"
+}
+```
+
+## Notes
+
+- Requests authenticated via API key are associated with a user internally. Deliveries created through the API will store `delivery.apiKeyId` so webhook delivery can be routed back to the correct key.

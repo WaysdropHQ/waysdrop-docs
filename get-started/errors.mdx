@@ -1,0 +1,173 @@
+# Errors
+
+Waysdrop returns a consistent error envelope for HTTP exceptions (via the global exception filter).
+
+## Error envelope
+
+All errors use this structure:
+
+```json
+{
+    "statusCode": 400,
+    "method": "POST",
+    "timestamp": "2026-01-24T12:34:56.789Z",
+    "path": "/api/request",
+    "url": "https://api.waysdrop.com/api/request",
+    "message": "Insufficient balance",
+    "environment": "live"
+}
+```
+
+**Field meanings**
+
+- `statusCode`: HTTP status code
+- `method`: HTTP method
+- `timestamp`: ISO timestamp when the error was generated
+- `path`: request path without query string
+- `url`: full request URL (includes query string)
+- `message`: human-readable error message
+- `environment`: server environment label
+
+## API key auth errors
+
+### Missing API key
+
+**Status**: `401 Unauthorized`  
+**Message**: `API key is required`
+
+```json
+{
+    "statusCode": 401,
+    "method": "GET",
+    "timestamp": "2026-01-24T12:34:56.789Z",
+    "path": "/api/regions",
+    "url": "https://api.waysdrop.com/api/regions",
+    "message": "API key is required",
+    "environment": "live"
+}
+```
+
+### Invalid API key format
+
+API keys must match: `wsp_(live|staging)_[a-f0-9]{64}`
+
+**Status**: `401 Unauthorized`  
+**Message**: `Invalid API key format`
+
+```json
+{
+    "statusCode": 401,
+    "method": "GET",
+    "timestamp": "2026-01-24T12:34:56.789Z",
+    "path": "/api/regions",
+    "url": "https://api.waysdrop.com/api/regions",
+    "message": "Invalid API key format",
+    "environment": "live"
+}
+```
+
+### Invalid or inactive API key
+
+**Status**: `401 Unauthorized`  
+**Message**: `Invalid API key`
+
+```json
+{
+    "statusCode": 401,
+    "method": "GET",
+    "timestamp": "2026-01-24T12:34:56.789Z",
+    "path": "/api/regions",
+    "url": "https://api.waysdrop.com/api/regions",
+    "message": "Invalid API key",
+    "environment": "live"
+}
+```
+
+## Rate limits / quota
+
+### API quota exceeded
+
+**Status**: `429 Too Many Requests`  
+**Message**: `API quota exceeded`
+
+```json
+{
+    "statusCode": 429,
+    "method": "GET",
+    "timestamp": "2026-01-24T12:34:56.789Z",
+    "path": "/api/regions",
+    "url": "https://api.waysdrop.com/api/regions",
+    "message": "API quota exceeded",
+    "environment": "live"
+}
+```
+
+## Business errors
+
+### Insufficient balance
+
+Returned when wallet debit fails (e.g., creating a delivery request).
+
+**Status**: `422 Unprocessable Entity`  
+**Message**: `Insufficient balance`
+
+```json
+{
+    "statusCode": 422,
+    "method": "POST",
+    "timestamp": "2026-01-24T12:34:56.789Z",
+    "path": "/api/request",
+    "url": "https://api.waysdrop.com/api/request",
+    "message": "Insufficient balance",
+    "environment": "live"
+}
+```
+
+### Payment required
+
+Returned when wallet debit fails for api usage
+
+**Status**: `402 Payment Required`  
+**Message**: `Insufficient wallet balance for API usage`
+
+```json
+{
+    "statusCode": 402,
+    "method": "POST",
+    "timestamp": "2026-01-24T12:34:56.789Z",
+    "path": "/api/request",
+    "url": "https://api.waysdrop.com/api/request",
+    "message": "Insufficient wallet balance for API usage",
+    "environment": "live"
+}
+```
+
+### Validation errors
+
+Request validation errors are returned as `400 Bad Request` and the message contains a semi-colon separated list.
+
+```json
+{
+    "statusCode": 400,
+    "method": "POST",
+    "timestamp": "2026-01-24T12:34:56.789Z",
+    "path": "/api/request",
+    "url": "https://api.waysdrop.com/api/request",
+    "message": "destinationContactEmail: must be an email; packagesId: each value in packagesId must be a UUID",
+    "environment": "live"
+}
+```
+
+## Success responses
+
+Most successful API responses use:
+
+```json
+{
+    "success": true,
+    "message": "Pricing fetched successfully",
+    "data": {}
+}
+```
+
+Some endpoints respond with `204 No Content` (no JSON body).

@@ -1,0 +1,574 @@
+# API module
+
+Base URLs:
+
+- Live: `https://api.waysdrop.com`
+- Staging: `https://staging-api.waysdrop.com`
+
+Base path: `/api`
+
+This module is intended for third‑party integrations. All endpoints require the `api-key` header.
+
+```bash
+curl -X GET "https://api.waysdrop.com/api/regions?search=north" \
+  -H "api-key: wsp_live_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+```
+
+## Response shapes
+
+### Success
+
+```json
+{
+  "success": true,
+  "message": "Regions fetched successfully",
+  "data": [
+    { "name": "North Central", "value": "NC", "zone": "North" },
+    { "name": "South West", "value": "SW", "zone": "South" }
+  ]
+}
+```
+
+### No content
+
+Some endpoints return `204 No Content` with an empty body.
+
+### Errors
+
+Errors are returned using the global error envelope described in [Errors](../get-started/errors.mdx).
+
+## Endpoints
+
+### GET /api/regions
+
+Fetch available regions.
+
+**Query**
+
+- `search` (optional, string)
+
+**200 Response**
+
+```json
+{
+  "success": true,
+  "message": "Regions fetched successfully",
+  "data": [
+    { "name": "North Central", "value": "NC", "zone": "North" },
+    { "name": "South West", "value": "SW", "zone": "South" }
+  ]
+}
+```
+
+**Response fields**
+
+- `name`: region name
+- `value`: region code used internally for routing/pricing
+- `zone`: broad grouping (e.g., North/South)
+
+### GET /api/states
+
+Fetch available states.
+
+**Query**
+
+- `search` (optional, string)
+
+**200 Response**
+
+```json
+{
+  "success": true,
+  "message": "States fetched successfully",
+  "data": [
+    { "name": "Lagos", "regionalZone": "South West" },
+    { "name": "FCT", "regionalZone": "North Central" }
+  ]
+}
+```
+
+### GET /api/cities
+
+Fetch available cities.
+
+**Query**
+
+- `search` (optional, string)
+
+**200 Response**
+
+```json
+{
+  "success": true,
+  "message": "Cities fetched successfully",
+  "data": [
+    {
+      "googlePlaceId": "ChIJ.....",
+      "country": "Nigeria",
+      "state": "Lagos",
+      "lgaOrCity": "Ikeja",
+      "region": "SW",
+      "regionName": "South West",
+      "regionalZone": "South West",
+      "zoneOrDistrict": "Ikeja",
+      "loc": { "lat": 6.6018, "lon": 3.3515 }
+    }
+  ]
+}
+```
+
+**Response notes**
+
+- `googlePlaceId` is the stable identifier used by routing and validation.
+- `loc` is the coordinate used for distance + ETA calculations.
+- If `search` is not provided, the API returns a limited slice (for fast autocomplete).
+
+### POST /api/route
+
+Get route data between two addresses.
+
+**Body**
+
+```json
+{
+  "origin": "Ladipo Kuku Street, Ikeja Lagos",
+  "destination": "Adewole Estate, Surulere Lagos"
+}
+```
+
+**200 Response**
+
+```json
+{
+  "success": true,
+  "message": "Route data fetched successfully",
+  "data": {
+    "distance": { "distanceKm": 12.743, "etaSeconds": 1649 },
+    "routeType": "INTER_CITY",
+    "origin": {
+      "googlePlaceId": "ChIJ.....",
+      "country": "Nigeria",
+      "countryCode": "NG",
+      "zipCode": null,
+      "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
+      "addressLine2": "Ikeja, Lagos, Nigeria",
+      "state": "Lagos",
+      "lgaOrCity": "Ikeja",
+      "region": "SW",
+      "regionName": "South West",
+      "regionalZone": "South West",
+      "zoneOrDistrict": "Ikeja",
+      "loc": { "lat": 6.6018, "lon": 3.3515 }
+    },
+    "destination": {
+      "googlePlaceId": "ChIJ.....",
+      "country": "Nigeria",
+      "countryCode": "NG",
+      "zipCode": null,
+      "addressLine1": "Adewole Estate, Surulere Lagos",
+      "addressLine2": "Surulere, Lagos, Nigeria",
+      "state": "Lagos",
+      "lgaOrCity": "Surulere",
+      "region": "SW",
+      "regionName": "South West",
+      "regionalZone": "South West",
+      "zoneOrDistrict": "Surulere",
+      "loc": { "lat": 6.4999, "lon": 3.3482 }
+    }
+  }
+}
+```
+
+**Response notes**
+
+- `distance.distanceKm` and `distance.etaSeconds` are computed using both line and road distance and then taking the max for safety.
+- `routeType` is derived from the resolved system locations (region/state/city).
+
+### GET /api/fleet-types
+
+Fetch available fleet types.
+
+**200 Response**
+
+```json
+{
+  "success": true,
+  "message": "Fleet types fetched successfully",
+  "data": [
+    {
+      "id": "uuid",
+      "name": "Bike",
+      "icon": "https://cdn.waysdrop.com/fleets/bike.png",
+      "minSize": null,
+      "maxSize": null,
+      "minWeight": "0.00",
+      "maxWeight": "5.00",
+      "description": "Small packages",
+      "status": "ACTIVE",
+      "createdAt": "2026-01-24T12:34:56.789Z",
+      "updatedAt": "2026-01-24T12:34:56.789Z",
+      "deletedAt": null
+    }
+  ]
+}
+```
+
+### POST /api/pricing
+
+Get pricing for a delivery request.
+
+**Body**
+
+```json
+{
+  "origin": "Ladipo Kuku Street, Ikeja Lagos",
+  "destination": "Adewole Estate, Surulere Lagos",
+  "totalWeight": 100,
+  "totalValue": 1000,
+  "urgencyType": "PRIORITY",
+  "slot": "10:00 - 13:00",
+  "fleetTypeId": "uuid",
+  "useInsurance": true
+}
+```
+
+`slot` is required when `urgencyType` is `SCHEDULED`.
+
+**200 Response**
+
+```json
+{
+  "success": true,
+  "message": "Pricing fetched successfully",
+  "data": {
+    "distance": { "distanceKm": 12.743, "etaSeconds": 1649 },
+    "routeType": "INTER_CITY",
+    "costs": {
+      "base": "1200",
+      "weight": "150",
+      "time": "0",
+      "insurance": "0",
+      "urgency": "200",
+      "fleet": "100",
+      "total": "1650"
+    },
+    "breakdown": {
+      "baseCharge": "Base distance charge for 12.74km",
+      "weightCharge": "Additional charge for 100kg",
+      "timeCharge": null,
+      "insuranceCharge": null,
+      "urgencyCharge": "Urgency charge for PRIORITY delivery",
+      "fleetCharge": "Fleet charge for Bike delivery"
+    }
+  }
+}
+```
+
+**Response notes**
+
+- `distance` is computed from coordinates after geofencing.
+- `costs` values are decimals and may be returned as strings.
+- If you pass a `fleetTypeId` that is not compatible with the weight, the API will price using the first compatible recommendation.
+
+### POST /api/request
+
+Create a delivery request (P2P).
+
+**Body**
+
+```json
+{
+  "origin": "Ladipo Kuku Street, Ikeja Lagos",
+  "destination": "Adewole Estate, Surulere Lagos",
+  "destinationContactEmail": "user@example.com",
+  "destinationContactPhone": "+2348012345678",
+  "destinationContactName": "John Doe",
+  "packagesId": ["uuid-1", "uuid-2"],
+  "type": "PICKUP",
+  "urgencyType": "PRIORITY",
+  "deliveryDate": "2026-01-24",
+  "deliverySlot": "04:00 - 14:00",
+  "fleetTypeId": "uuid",
+  "requireProofCode": true,
+  "useInsurance": true,
+  "note": "Any additional notes"
+}
+```
+
+Origin contact fields are optional (`originContactEmail`, `originContactPhone`, `originContactName`) and default to your user’s info.
+
+**201 Response**
+
+```json
+{
+  "success": true,
+  "message": "Delivery request created successfully",
+  "data": {
+    "id": "uuid",
+    "deliveryId": "uuid",
+    "userId": "uuid",
+    "profileId": "uuid",
+    "type": "PICKUP",
+    "urgencyType": "PRIORITY",
+    "deliveryDate": "2026-01-24T00:00:00.000Z",
+    "deliverySlot": "04:00 - 14:00",
+    "status": "PENDING",
+    "totalWeight": 100,
+    "totalValue": 1000,
+    "createdAt": "2026-01-24T12:34:56.789Z",
+    "updatedAt": "2026-01-24T12:34:56.789Z",
+    "delivery": {
+      "id": "uuid",
+      "userId": "uuid",
+      "trackingId": "P2P-XXXXX",
+      "type": "P2P",
+      "status": "REQUEST_CREATED",
+      "routeType": "INTER_CITY",
+      "fleetTypeId": "uuid",
+      "apiKeyId": "uuid",
+      "distanceKm": "12.743",
+      "etaSeconds": 1649,
+      "deliveryFee": "1650",
+      "weightFee": "150",
+      "fleetFee": "100",
+      "urgencyFee": "200",
+      "insuranceFee": "0",
+      "baseOrDistanceFee": "1200",
+      "origin": {},
+      "destination": {},
+      "createdAt": "2026-01-24T12:34:56.789Z",
+      "updatedAt": "2026-01-24T12:34:56.789Z"
+    }
+  }
+}
+```
+
+**Common errors**
+
+- `400` `Insufficient balance`
+- `400` `Invalid packages selection`
+- `400` `Origin and destination cannot be the same`
+- `404` `Fleet type not found`
+
+### POST /api/request/:deliveryId/cancel
+
+Cancel an eligible delivery request.
+
+**Path params**
+
+- `deliveryId` (uuid)
+
+**201 Response**
+
+```json
+{
+  "success": true,
+  "message": "Delivery request has been canceled",
+  "data": {
+    "delivery": { "id": "uuid" }
+  }
+}
+```
+
+**Common errors**
+
+- `404` `Delivery request not found`
+- `400` `Delivery request can not be canceled due to its current status`
+- `400` `You can only cancel a delivery request twice every 5 hours`
+
+### POST /api/package
+
+Create or edit a package.
+
+Uses the same request body as the P2P package endpoint (`CreateOrEditPackageDTO`).
+
+**201 Response**
+
+```json
+{
+  "success": true,
+  "message": "Package saved successfully",
+  "data": {
+    "id": "uuid",
+    "userId": "uuid",
+    "p2pDeliveryId": null,
+    "packageType": "Electronics",
+    "name": "Laptop",
+    "image": "https://cdn.waysdrop.com/....jpg",
+    "description": "Package description",
+    "note": "Fragile",
+    "quantity": 1,
+    "weight": "1.25000",
+    "value": "250000.00",
+    "unit": "cm",
+    "type": "PACKAGE_ITEM",
+    "createdAt": "2026-01-24T12:34:56.789Z",
+    "updatedAt": "2026-01-24T12:34:56.789Z",
+    "deletedAt": null
+  }
+}
+```
+
+### DELETE /api/package/:packageId
+
+Delete a package.
+
+**Path params**
+
+- `packageId` (uuid)
+
+**204 Response**
+
+- No content
+
+### GET /api/packages
+
+Get packages that have not been assigned to a delivery (for the authenticated user).
+
+**200 Response**
+
+```json
+{
+  "success": true,
+  "message": "Packages retrieved successfully",
+  "data": [
+    {
+      "id": "uuid",
+      "packageType": "Electronics",
+      "name": "Laptop",
+      "quantity": 1,
+      "weight": "1.25000",
+      "value": "250000.00",
+      "p2pDeliveryId": null,
+      "createdAt": "2026-01-24T12:34:56.789Z",
+      "updatedAt": "2026-01-24T12:34:56.789Z"
+    }
+  ]
+}
+```
+
+### GET /api/deliveries/:deliveryId
+
+Get a delivery (for the authenticated user).
+
+**Path params**
+
+- `deliveryId` (uuid)
+
+**200 Response**
+
+```json
+{
+  "success": true,
+  "message": "Delivery retrieved successfully",
+  "data": {
+    "id": "uuid",
+    "userId": "uuid",
+    "trackingId": "P2P-XXXXX",
+    "type": "P2P",
+    "status": "IN_TRANSIT",
+    "routeType": "INTER_CITY",
+    "fleetType": {
+      "id": "uuid",
+      "name": "Bike",
+      "icon": "https://cdn.waysdrop.com/..."
+    },
+    "p2pDelivery": {
+      "id": "uuid",
+      "status": "PENDING",
+      "profileId": "uuid",
+      "urgencyType": "PRIORITY",
+      "deliveryDate": "2026-01-24T00:00:00.000Z",
+      "deliverySlot": "04:00 - 14:00",
+      "totalWeight": 2.5,
+      "totalValue": 12000
+    },
+    "origin": {
+      "googlePlaceId": "ChIJ.....",
+      "country": "Nigeria",
+      "countryCode": "NG",
+      "zipCode": null,
+      "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
+      "addressLine2": "Ikeja, Lagos, Nigeria",
+      "state": "Lagos",
+      "lgaOrCity": "Ikeja",
+      "region": "SW",
+      "regionName": "South West",
+      "regionalZone": "South West",
+      "zoneOrDistrict": "Ikeja",
+      "loc": { "lat": 6.6018, "lon": 3.3515 },
+      "contactName": "John Doe",
+      "contactPhone": "+2348012345678",
+      "contactEmail": "johndoe@example.com"
+    },
+    "destination": {
+      "googlePlaceId": "ChIJ.....",
+      "country": "Nigeria",
+      "countryCode": "NG",
+      "zipCode": null,
+      "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
+      "addressLine2": "Ikeja, Lagos, Nigeria",
+      "state": "Lagos",
+      "lgaOrCity": "Ikeja",
+      "region": "SW",
+      "regionName": "South West",
+      "regionalZone": "South West",
+      "zoneOrDistrict": "Ikeja",
+      "loc": { "lat": 6.6018, "lon": 3.3515 },
+      "contactName": "John Doe",
+      "contactPhone": "+2348012345678",
+      "contactEmail": "johndoe@example.com"
+    },
+    "proofs": [
+      {
+        "id": "uuid",
+        "type": "COLLECTION",
+        "code": "1234",
+        "isActive": false,
+        "createdAt": "2026-01-24T12:34:56.789Z"
+      }
+    ],
+    "deliverySteps": [
+      {
+        "id": "uuid",
+        "step": "REQUEST_CREATED",
+        "active": false,
+        "updatedAt": "2026-01-24T12:34:56.789Z"
+      },
+      {
+        "id": "uuid",
+        "step": "IN_TRANSIT",
+        "active": true,
+        "updatedAt": "2026-01-24T12:40:00.000Z"
+      }
+    ],
+    "courier": {
+      "name": "Courier name",
+      "phone": "+2348012345678",
+      "profilePhoto": "https://cdn.waysdrop.com/....jpg",
+      "currentLocation": {
+        "country": "Nigeria",
+        "state": "Lagos",
+        "lgaOrCity": "Ikeja",
+        "loc": { "lat": 6.6018, "lon": 3.3515 }
+      },
+      "eta": {
+        "from": "2026-01-24T12:50:00.000Z",
+        "to": "2026-01-24T13:30:00.000Z"
+      },
+      "fleet": {
+        "regNo": "ABC-123",
+        "make": "Honda",
+        "model": "CBR",
+        "colour": "Red",
+        "typeId": "uuid"
+      }
+    }
+  }
+}
+```
+
+**Response notes**
+
+- `courier` is `null` until the delivery is assigned. When present, it contains an ETA window computed from live location.
+- `deliverySteps` are filtered to visible steps only (hidden steps are not returned).
