@@ -288,13 +288,17 @@ Create a delivery request (P2P).
     "deliverySlot": "04:00 - 14:00",
     "fleetTypeId": "uuid",
     "requireProofCode": true,
-    "useInsurance": true,
+    "link3rdPartyByContactInfo": true,
+    "useInsurance": false,
     "note": "Any additional notes"
 }
 ```
 
-Optional fields are `originContactEmail`, `originContactPhone`, `originContactName`
-They are default to your user’s info if not provided, but the destination contact fields are **required.**
+- `originContactEmail`, `originContactPhone`, `originContactName` are optional. If omitted, they default to your user’s info. Destination contact fields are **required**.
+- `link3rdPartyByContactInfo` is optional (default: `false`). If set to `true`, Waysdrop uses the destination contact info to link an existing user, so they can track the delivery in the mobile app.
+- `deliveryDate` and `deliverySlot` are only required if `urgencyType` is `SCHEDULED`.
+- `type` can either be `PICKUP` or `DROP_OFF`.
+- `requireProofCode` is optional (default: `false`). If set to `true`, codes will be sent to the origin and destination contact info. The user will need to provide proof of collection and delivery codes to the courier upon each interaction.
 
 **201 Response**
 
