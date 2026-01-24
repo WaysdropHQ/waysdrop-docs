@@ -1,0 +1,98 @@
+# File
+
+Use these endpoints to upload files and get a hosted URL back (for example, package images). These endpoints are safe to call directly from a client app if your API key was created with `serverOnly` unchecked.
+
+Base URLs:
+
+- Live: `https://api.waysdrop.com`
+- Staging: `https://staging-api.waysdrop.com`
+
+Base path: `/file`
+
+All upload endpoints require the `api-key` header.
+
+## POST /file/single-upload
+
+Upload a single file and receive a hosted URL.
+
+**Content-Type**: `multipart/form-data`
+
+**Form fields**
+
+- `upload-file` (file): the file to upload
+
+**Example**
+
+```bash
+curl -X POST "https://api.waysdrop.com/file/single-upload" \
+  -H "api-key: wsp_live_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" \
+  -F "upload-file=@/path/to/image.jpg"
+```
+
+**200 Response**
+
+```json
+{
+    "success": true,
+    "message": "File uploaded.",
+    "data": {
+        "url": "https://cdn.waysdrop.com/single/your-file-name.jpg"
+    }
+}
+```
+
+## POST /file/bulk-upload
+
+Upload multiple files and receive hosted URLs.
+
+**Content-Type**: `multipart/form-data`
+
+**Notes**
+
+- The field name of each uploaded file should be the same.
+- Maximum files per request: `7`.
+
+**Example**
+
+```bash
+curl -X POST "https://api.waysdrop.com/file/bulk-upload" \
+  -H "api-key: wsp_live_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" \
+  -F "files=@/path/to/image-1.jpg" \
+  -F "files=@/path/to/image-2.jpg"
+```
+
+**200 Response**
+
+```json
+{
+    "success": true,
+    "message": "Files uploaded.",
+    "data": {
+        "urls": [
+            "https://cdn.waysdrop.com/bulk/your-file-name-1.jpg",
+            "https://cdn.waysdrop.com/bulk/your-file-name-2.jpg"
+        ]
+    }
+}
+```
+
+If an upload fails, the corresponding entry may be returned as an error object in the `urls` array.
+
+## POST /file/download
+
+Download a file by URL.
+
+This endpoint returns a binary file response.
+
+**Body**
+
+```json
+{
+    "url": "https://cdn.waysdrop.com/single/your-file-name.jpg"
+}
+```
+
+**200 Response**
+
+- `Content-Type: application/octet-stream`
+- `Content-Disposition: attachment; filename=<path>`

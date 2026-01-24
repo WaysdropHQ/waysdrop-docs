@@ -19,7 +19,7 @@
         },
         {
             "group": "API reference",
-            "pages": ["api-reference/api"]
+            "pages": ["api-reference/api", "api-reference/file"]
         }
     ]
 }

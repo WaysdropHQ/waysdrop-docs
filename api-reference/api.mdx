@@ -20,12 +20,12 @@ curl -X GET "https://api.waysdrop.com/api/regions?search=north" \
 
 ```json
 {
-  "success": true,
-  "message": "Regions fetched successfully",
-  "data": [
-    { "name": "North Central", "value": "NC", "zone": "North" },
-    { "name": "South West", "value": "SW", "zone": "South" }
-  ]
+    "success": true,
+    "message": "Regions fetched successfully",
+    "data": [
+        { "name": "North Central", "value": "NC", "zone": "North" },
+        { "name": "South West", "value": "SW", "zone": "South" }
+    ]
 }
 ```
 
@@ -35,7 +35,7 @@ Some endpoints return `204 No Content` with an empty body.
 
 ### Errors
 
-Errors are returned using the global error envelope described in [Errors](../get-started/errors.mdx).
+Errors are returned using the global error envelope described in [Errors](../get-started/errors).
 
 ## Endpoints
 
@@ -51,12 +51,12 @@ Fetch available regions.
 
 ```json
 {
-  "success": true,
-  "message": "Regions fetched successfully",
-  "data": [
-    { "name": "North Central", "value": "NC", "zone": "North" },
-    { "name": "South West", "value": "SW", "zone": "South" }
-  ]
+    "success": true,
+    "message": "Regions fetched successfully",
+    "data": [
+        { "name": "North Central", "value": "NC", "zone": "North" },
+        { "name": "South West", "value": "SW", "zone": "South" }
+    ]
 }
 ```
 
@@ -78,12 +78,12 @@ Fetch available states.
 
 ```json
 {
-  "success": true,
-  "message": "States fetched successfully",
-  "data": [
-    { "name": "Lagos", "regionalZone": "South West" },
-    { "name": "FCT", "regionalZone": "North Central" }
-  ]
+    "success": true,
+    "message": "States fetched successfully",
+    "data": [
+        { "name": "Lagos", "regionalZone": "South West" },
+        { "name": "FCT", "regionalZone": "North Central" }
+    ]
 }
 ```
 
@@ -99,21 +99,21 @@ Fetch available cities.
 
 ```json
 {
-  "success": true,
-  "message": "Cities fetched successfully",
-  "data": [
-    {
-      "googlePlaceId": "ChIJ.....",
-      "country": "Nigeria",
-      "state": "Lagos",
-      "lgaOrCity": "Ikeja",
-      "region": "SW",
-      "regionName": "South West",
-      "regionalZone": "South West",
-      "zoneOrDistrict": "Ikeja",
-      "loc": { "lat": 6.6018, "lon": 3.3515 }
-    }
-  ]
+    "success": true,
+    "message": "Cities fetched successfully",
+    "data": [
+        {
+            "googlePlaceId": "ChIJ.....",
+            "country": "Nigeria",
+            "state": "Lagos",
+            "lgaOrCity": "Ikeja",
+            "region": "SW",
+            "regionName": "South West",
+            "regionalZone": "South West",
+            "zoneOrDistrict": "Ikeja",
+            "loc": { "lat": 6.6018, "lon": 3.3515 }
+        }
+    ]
 }
 ```
 
@@ -131,8 +131,8 @@ Get route data between two addresses.
 
 ```json
 {
-  "origin": "Ladipo Kuku Street, Ikeja Lagos",
-  "destination": "Adewole Estate, Surulere Lagos"
+    "origin": "Ladipo Kuku Street, Ikeja Lagos",
+    "destination": "Adewole Estate, Surulere Lagos"
 }
 ```
 
@@ -140,42 +140,42 @@ Get route data between two addresses.
 
 ```json
 {
-  "success": true,
-  "message": "Route data fetched successfully",
-  "data": {
-    "distance": { "distanceKm": 12.743, "etaSeconds": 1649 },
-    "routeType": "INTER_CITY",
-    "origin": {
-      "googlePlaceId": "ChIJ.....",
-      "country": "Nigeria",
-      "countryCode": "NG",
-      "zipCode": null,
-      "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
-      "addressLine2": "Ikeja, Lagos, Nigeria",
-      "state": "Lagos",
-      "lgaOrCity": "Ikeja",
-      "region": "SW",
-      "regionName": "South West",
-      "regionalZone": "South West",
-      "zoneOrDistrict": "Ikeja",
-      "loc": { "lat": 6.6018, "lon": 3.3515 }
-    },
-    "destination": {
-      "googlePlaceId": "ChIJ.....",
-      "country": "Nigeria",
-      "countryCode": "NG",
-      "zipCode": null,
-      "addressLine1": "Adewole Estate, Surulere Lagos",
-      "addressLine2": "Surulere, Lagos, Nigeria",
-      "state": "Lagos",
-      "lgaOrCity": "Surulere",
-      "region": "SW",
-      "regionName": "South West",
-      "regionalZone": "South West",
-      "zoneOrDistrict": "Surulere",
-      "loc": { "lat": 6.4999, "lon": 3.3482 }
+    "success": true,
+    "message": "Route data fetched successfully",
+    "data": {
+        "distance": { "distanceKm": 12.743, "etaSeconds": 1649 },
+        "routeType": "INTER_CITY",
+        "origin": {
+            "googlePlaceId": "ChIJ.....",
+            "country": "Nigeria",
+            "countryCode": "NG",
+            "zipCode": null,
+            "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
+            "addressLine2": "Ikeja, Lagos, Nigeria",
+            "state": "Lagos",
+            "lgaOrCity": "Ikeja",
+            "region": "SW",
+            "regionName": "South West",
+            "regionalZone": "South West",
+            "zoneOrDistrict": "Ikeja",
+            "loc": { "lat": 6.6018, "lon": 3.3515 }
+        },
+        "destination": {
+            "googlePlaceId": "ChIJ.....",
+            "country": "Nigeria",
+            "countryCode": "NG",
+            "zipCode": null,
+            "addressLine1": "Adewole Estate, Surulere Lagos",
+            "addressLine2": "Surulere, Lagos, Nigeria",
+            "state": "Lagos",
+            "lgaOrCity": "Surulere",
+            "region": "SW",
+            "regionName": "South West",
+            "regionalZone": "South West",
+            "zoneOrDistrict": "Surulere",
+            "loc": { "lat": 6.4999, "lon": 3.3482 }
+        }
     }
-  }
 }
 ```
 
@@ -192,24 +192,22 @@ Fetch available fleet types.
 
 ```json
 {
-  "success": true,
-  "message": "Fleet types fetched successfully",
-  "data": [
-    {
-      "id": "uuid",
-      "name": "Bike",
-      "icon": "https://cdn.waysdrop.com/fleets/bike.png",
-      "minSize": null,
-      "maxSize": null,
-      "minWeight": "0.00",
-      "maxWeight": "5.00",
-      "description": "Small packages",
-      "status": "ACTIVE",
-      "createdAt": "2026-01-24T12:34:56.789Z",
-      "updatedAt": "2026-01-24T12:34:56.789Z",
-      "deletedAt": null
-    }
-  ]
+    "success": true,
+    "message": "Fleet types fetched successfully",
+    "data": [
+        {
+            "id": "uuid",
+            "name": "Bike",
+            "icon": "https://cdn.waysdrop.com/fleets/bike.png",
+            "minWeight": "0.00",
+            "maxWeight": "5.00",
+            "description": "Small packages",
+            "status": "ACTIVE",
+            "createdAt": "2026-01-24T12:34:56.789Z",
+            "updatedAt": "2026-01-24T12:34:56.789Z",
+            "deletedAt": null
+        }
+    ]
 }
 ```
 
@@ -221,14 +219,14 @@ Get pricing for a delivery request.
 
 ```json
 {
-  "origin": "Ladipo Kuku Street, Ikeja Lagos",
-  "destination": "Adewole Estate, Surulere Lagos",
-  "totalWeight": 100,
-  "totalValue": 1000,
-  "urgencyType": "PRIORITY",
-  "slot": "10:00 - 13:00",
-  "fleetTypeId": "uuid",
-  "useInsurance": true
+    "origin": "Ladipo Kuku Street, Ikeja Lagos",
+    "destination": "Adewole Estate, Surulere Lagos",
+    "totalWeight": 100,
+    "totalValue": 1000,
+    "urgencyType": "PRIORITY",
+    "slot": "10:00 - 13:00",
+    "fleetTypeId": "uuid",
+    "useInsurance": true
 }
 ```
 
@@ -238,29 +236,29 @@ Get pricing for a delivery request.
 
 ```json
 {
-  "success": true,
-  "message": "Pricing fetched successfully",
-  "data": {
-    "distance": { "distanceKm": 12.743, "etaSeconds": 1649 },
-    "routeType": "INTER_CITY",
-    "costs": {
-      "base": "1200",
-      "weight": "150",
-      "time": "0",
-      "insurance": "0",
-      "urgency": "200",
-      "fleet": "100",
-      "total": "1650"
-    },
-    "breakdown": {
-      "baseCharge": "Base distance charge for 12.74km",
-      "weightCharge": "Additional charge for 100kg",
-      "timeCharge": null,
-      "insuranceCharge": null,
-      "urgencyCharge": "Urgency charge for PRIORITY delivery",
-      "fleetCharge": "Fleet charge for Bike delivery"
+    "success": true,
+    "message": "Pricing fetched successfully",
+    "data": {
+        "distance": { "distanceKm": 12.743, "etaSeconds": 1649 },
+        "routeType": "INTER_CITY",
+        "costs": {
+            "base": "1200",
+            "weight": "150",
+            "time": "0",
+            "insurance": "0",
+            "urgency": "200",
+            "fleet": "100",
+            "total": "1650"
+        },
+        "breakdown": {
+            "baseCharge": "Base distance charge for 12.74km",
+            "weightCharge": "Additional charge for 100kg",
+            "timeCharge": null,
+            "insuranceCharge": null,
+            "urgencyCharge": "Urgency charge for PRIORITY delivery",
+            "fleetCharge": "Fleet charge for Bike delivery"
+        }
     }
-  }
 }
 ```
 
@@ -278,74 +276,75 @@ Create a delivery request (P2P).
 
 ```json
 {
-  "origin": "Ladipo Kuku Street, Ikeja Lagos",
-  "destination": "Adewole Estate, Surulere Lagos",
-  "destinationContactEmail": "user@example.com",
-  "destinationContactPhone": "+2348012345678",
-  "destinationContactName": "John Doe",
-  "packagesId": ["uuid-1", "uuid-2"],
-  "type": "PICKUP",
-  "urgencyType": "PRIORITY",
-  "deliveryDate": "2026-01-24",
-  "deliverySlot": "04:00 - 14:00",
-  "fleetTypeId": "uuid",
-  "requireProofCode": true,
-  "useInsurance": true,
-  "note": "Any additional notes"
+    "origin": "Ladipo Kuku Street, Ikeja Lagos",
+    "destination": "Adewole Estate, Surulere Lagos",
+    "destinationContactEmail": "user@example.com",
+    "destinationContactPhone": "+2348012345678",
+    "destinationContactName": "John Doe",
+    "packagesId": ["uuid-1", "uuid-2"],
+    "type": "PICKUP",
+    "urgencyType": "PRIORITY",
+    "deliveryDate": "2026-01-24",
+    "deliverySlot": "04:00 - 14:00",
+    "fleetTypeId": "uuid",
+    "requireProofCode": true,
+    "useInsurance": true,
+    "note": "Any additional notes"
 }
 ```
 
-Origin contact fields are optional (`originContactEmail`, `originContactPhone`, `originContactName`) and default to your user’s info.
+Optional fields are `originContactEmail`, `originContactPhone`, `originContactName`
+They are default to your user’s info if not provided, but the destination contact fields are **required.**
 
 **201 Response**
 
 ```json
 {
-  "success": true,
-  "message": "Delivery request created successfully",
-  "data": {
-    "id": "uuid",
-    "deliveryId": "uuid",
-    "userId": "uuid",
-    "profileId": "uuid",
-    "type": "PICKUP",
-    "urgencyType": "PRIORITY",
-    "deliveryDate": "2026-01-24T00:00:00.000Z",
-    "deliverySlot": "04:00 - 14:00",
-    "status": "PENDING",
-    "totalWeight": 100,
-    "totalValue": 1000,
-    "createdAt": "2026-01-24T12:34:56.789Z",
-    "updatedAt": "2026-01-24T12:34:56.789Z",
-    "delivery": {
-      "id": "uuid",
-      "userId": "uuid",
-      "trackingId": "P2P-XXXXX",
-      "type": "P2P",
-      "status": "REQUEST_CREATED",
-      "routeType": "INTER_CITY",
-      "fleetTypeId": "uuid",
-      "apiKeyId": "uuid",
-      "distanceKm": "12.743",
-      "etaSeconds": 1649,
-      "deliveryFee": "1650",
-      "weightFee": "150",
-      "fleetFee": "100",
-      "urgencyFee": "200",
-      "insuranceFee": "0",
-      "baseOrDistanceFee": "1200",
-      "origin": {},
-      "destination": {},
-      "createdAt": "2026-01-24T12:34:56.789Z",
-      "updatedAt": "2026-01-24T12:34:56.789Z"
+    "success": true,
+    "message": "Delivery request created successfully",
+    "data": {
+        "id": "uuid",
+        "deliveryId": "uuid",
+        "userId": "uuid",
+        "profileId": "uuid",
+        "type": "PICKUP",
+        "urgencyType": "PRIORITY",
+        "deliveryDate": "2026-01-24T00:00:00.000Z",
+        "deliverySlot": "04:00 - 14:00",
+        "status": "PENDING",
+        "totalWeight": 100,
+        "totalValue": 1000,
+        "createdAt": "2026-01-24T12:34:56.789Z",
+        "updatedAt": "2026-01-24T12:34:56.789Z",
+        "delivery": {
+            "id": "uuid",
+            "userId": "uuid",
+            "trackingId": "P2P-XXXXX",
+            "type": "P2P",
+            "status": "REQUEST_CREATED",
+            "routeType": "INTER_CITY",
+            "fleetTypeId": "uuid",
+            "apiKeyId": "uuid",
+            "distanceKm": "12.743",
+            "etaSeconds": 1649,
+            "deliveryFee": "1650",
+            "weightFee": "150",
+            "fleetFee": "100",
+            "urgencyFee": "200",
+            "insuranceFee": "0",
+            "baseOrDistanceFee": "1200",
+            "origin": {},
+            "destination": {},
+            "createdAt": "2026-01-24T12:34:56.789Z",
+            "updatedAt": "2026-01-24T12:34:56.789Z"
+        }
     }
-  }
 }
 ```
 
 **Common errors**
 
-- `400` `Insufficient balance`
+- `422` `Insufficient balance`
 - `400` `Invalid packages selection`
 - `400` `Origin and destination cannot be the same`
 - `404` `Fleet type not found`
@@ -362,11 +361,11 @@ Cancel an eligible delivery request.
 
 ```json
 {
-  "success": true,
-  "message": "Delivery request has been canceled",
-  "data": {
-    "delivery": { "id": "uuid" }
-  }
+    "success": true,
+    "message": "Delivery request has been canceled",
+    "data": {
+        "delivery": { "id": "uuid" }
+    }
 }
 ```
 
@@ -380,32 +379,74 @@ Cancel an eligible delivery request.
 
 Create or edit a package.
 
-Uses the same request body as the P2P package endpoint (`CreateOrEditPackageDTO`).
+**Body**
+
+Use this endpoint to create a new package or update an existing one.
+
+- To **create**, omit `packageId` and provide all required fields.
+- To **update**, include `packageId` and provide only the fields you want to change.
+
+**Create example**
+
+```json
+{
+    "packageType": "Electronics",
+    "image": "https://cdn.waysdrop.com/packages/laptop.jpg",
+    "name": "Laptop",
+    "description": "Package description",
+    "quantity": 1,
+    "weight": 1.25,
+    "value": 250000,
+    "note": "Fragile"
+}
+```
+
+**Update example**
+
+```json
+{
+    "packageId": "uuid",
+    "description": "Updated description",
+    "note": "Handle with care"
+}
+```
+
+**Fields**
+
+- `packageId` (optional, uuid): include to update an existing package
+- `packageType` (string): required when creating
+- `image` (optional, https URL): must be hosted on `cdn.waysdrop.com`
+- `name` (string): required when creating
+- `description` (optional, string)
+- `quantity` (number, int): required when creating
+- `weight` (number): required when creating (up to 5 decimal places)
+- `value` (number): required when creating
+- `note` (optional, string)
 
 **201 Response**
 
 ```json
 {
-  "success": true,
-  "message": "Package saved successfully",
-  "data": {
-    "id": "uuid",
-    "userId": "uuid",
-    "p2pDeliveryId": null,
-    "packageType": "Electronics",
-    "name": "Laptop",
-    "image": "https://cdn.waysdrop.com/....jpg",
-    "description": "Package description",
-    "note": "Fragile",
-    "quantity": 1,
-    "weight": "1.25000",
-    "value": "250000.00",
-    "unit": "cm",
-    "type": "PACKAGE_ITEM",
-    "createdAt": "2026-01-24T12:34:56.789Z",
-    "updatedAt": "2026-01-24T12:34:56.789Z",
-    "deletedAt": null
-  }
+    "success": true,
+    "message": "Package saved successfully",
+    "data": {
+        "id": "uuid",
+        "userId": "uuid",
+        "p2pDeliveryId": null,
+        "packageType": "Electronics",
+        "name": "Laptop",
+        "image": "https://cdn.waysdrop.com/....jpg",
+        "description": "Package description",
+        "note": "Fragile",
+        "quantity": 1,
+        "weight": "1.25000",
+        "value": "250000.00",
+        "unit": "cm",
+        "type": "PACKAGE_ITEM",
+        "createdAt": "2026-01-24T12:34:56.789Z",
+        "updatedAt": "2026-01-24T12:34:56.789Z",
+        "deletedAt": null
+    }
 }
 ```
 
@@ -429,21 +470,21 @@ Get packages that have not been assigned to a delivery (for the authenticated us
 
 ```json
 {
-  "success": true,
-  "message": "Packages retrieved successfully",
-  "data": [
-    {
-      "id": "uuid",
-      "packageType": "Electronics",
-      "name": "Laptop",
-      "quantity": 1,
-      "weight": "1.25000",
-      "value": "250000.00",
-      "p2pDeliveryId": null,
-      "createdAt": "2026-01-24T12:34:56.789Z",
-      "updatedAt": "2026-01-24T12:34:56.789Z"
-    }
-  ]
+    "success": true,
+    "message": "Packages retrieved successfully",
+    "data": [
+        {
+            "id": "uuid",
+            "packageType": "Electronics",
+            "name": "Laptop",
+            "quantity": 1,
+            "weight": "1.25000",
+            "value": "250000.00",
+            "p2pDeliveryId": null,
+            "createdAt": "2026-01-24T12:34:56.789Z",
+            "updatedAt": "2026-01-24T12:34:56.789Z"
+        }
+    ]
 }
 ```
 
@@ -459,112 +500,112 @@ Get a delivery (for the authenticated user).
 
 ```json
 {
-  "success": true,
-  "message": "Delivery retrieved successfully",
-  "data": {
-    "id": "uuid",
-    "userId": "uuid",
-    "trackingId": "P2P-XXXXX",
-    "type": "P2P",
-    "status": "IN_TRANSIT",
-    "routeType": "INTER_CITY",
-    "fleetType": {
-      "id": "uuid",
-      "name": "Bike",
-      "icon": "https://cdn.waysdrop.com/..."
-    },
-    "p2pDelivery": {
-      "id": "uuid",
-      "status": "PENDING",
-      "profileId": "uuid",
-      "urgencyType": "PRIORITY",
-      "deliveryDate": "2026-01-24T00:00:00.000Z",
-      "deliverySlot": "04:00 - 14:00",
-      "totalWeight": 2.5,
-      "totalValue": 12000
-    },
-    "origin": {
-      "googlePlaceId": "ChIJ.....",
-      "country": "Nigeria",
-      "countryCode": "NG",
-      "zipCode": null,
-      "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
-      "addressLine2": "Ikeja, Lagos, Nigeria",
-      "state": "Lagos",
-      "lgaOrCity": "Ikeja",
-      "region": "SW",
-      "regionName": "South West",
-      "regionalZone": "South West",
-      "zoneOrDistrict": "Ikeja",
-      "loc": { "lat": 6.6018, "lon": 3.3515 },
-      "contactName": "John Doe",
-      "contactPhone": "+2348012345678",
-      "contactEmail": "johndoe@example.com"
-    },
-    "destination": {
-      "googlePlaceId": "ChIJ.....",
-      "country": "Nigeria",
-      "countryCode": "NG",
-      "zipCode": null,
-      "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
-      "addressLine2": "Ikeja, Lagos, Nigeria",
-      "state": "Lagos",
-      "lgaOrCity": "Ikeja",
-      "region": "SW",
-      "regionName": "South West",
-      "regionalZone": "South West",
-      "zoneOrDistrict": "Ikeja",
-      "loc": { "lat": 6.6018, "lon": 3.3515 },
-      "contactName": "John Doe",
-      "contactPhone": "+2348012345678",
-      "contactEmail": "johndoe@example.com"
-    },
-    "proofs": [
-      {
+    "success": true,
+    "message": "Delivery retrieved successfully",
+    "data": {
         "id": "uuid",
-        "type": "COLLECTION",
-        "code": "1234",
-        "isActive": false,
-        "createdAt": "2026-01-24T12:34:56.789Z"
-      }
-    ],
-    "deliverySteps": [
-      {
-        "id": "uuid",
-        "step": "REQUEST_CREATED",
-        "active": false,
-        "updatedAt": "2026-01-24T12:34:56.789Z"
-      },
-      {
-        "id": "uuid",
-        "step": "IN_TRANSIT",
-        "active": true,
-        "updatedAt": "2026-01-24T12:40:00.000Z"
-      }
-    ],
-    "courier": {
-      "name": "Courier name",
-      "phone": "+2348012345678",
-      "profilePhoto": "https://cdn.waysdrop.com/....jpg",
-      "currentLocation": {
-        "country": "Nigeria",
-        "state": "Lagos",
-        "lgaOrCity": "Ikeja",
-        "loc": { "lat": 6.6018, "lon": 3.3515 }
-      },
-      "eta": {
-        "from": "2026-01-24T12:50:00.000Z",
-        "to": "2026-01-24T13:30:00.000Z"
-      },
-      "fleet": {
-        "regNo": "ABC-123",
-        "make": "Honda",
-        "model": "CBR",
-        "colour": "Red",
-        "typeId": "uuid"
-      }
+        "userId": "uuid",
+        "trackingId": "P2P-XXXXX",
+        "type": "P2P",
+        "status": "IN_TRANSIT",
+        "routeType": "INTER_CITY",
+        "fleetType": {
+            "id": "uuid",
+            "name": "Bike",
+            "icon": "https://cdn.waysdrop.com/..."
+        },
+        "p2pDelivery": {
+            "id": "uuid",
+            "status": "PENDING",
+            "profileId": "uuid",
+            "urgencyType": "PRIORITY",
+            "deliveryDate": "2026-01-24T00:00:00.000Z",
+            "deliverySlot": "04:00 - 14:00",
+            "totalWeight": 2.5,
+            "totalValue": 12000
+        },
+        "origin": {
+            "googlePlaceId": "ChIJ.....",
+            "country": "Nigeria",
+            "countryCode": "NG",
+            "zipCode": null,
+            "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
+            "addressLine2": "Ikeja, Lagos, Nigeria",
+            "state": "Lagos",
+            "lgaOrCity": "Ikeja",
+            "region": "SW",
+            "regionName": "South West",
+            "regionalZone": "South West",
+            "zoneOrDistrict": "Ikeja",
+            "loc": { "lat": 6.6018, "lon": 3.3515 },
+            "contactName": "John Doe",
+            "contactPhone": "+2348012345678",
+            "contactEmail": "johndoe@example.com"
+        },
+        "destination": {
+            "googlePlaceId": "ChIJ.....",
+            "country": "Nigeria",
+            "countryCode": "NG",
+            "zipCode": null,
+            "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
+            "addressLine2": "Ikeja, Lagos, Nigeria",
+            "state": "Lagos",
+            "lgaOrCity": "Ikeja",
+            "region": "SW",
+            "regionName": "South West",
+            "regionalZone": "South West",
+            "zoneOrDistrict": "Ikeja",
+            "loc": { "lat": 6.6018, "lon": 3.3515 },
+            "contactName": "John Doe",
+            "contactPhone": "+2348012345678",
+            "contactEmail": "johndoe@example.com"
+        },
+        "proofs": [
+            {
+                "id": "uuid",
+                "type": "COLLECTION",
+                "code": "1234",
+                "isActive": false,
+                "createdAt": "2026-01-24T12:34:56.789Z"
+            }
+        ],
+        "deliverySteps": [
+            {
+                "id": "uuid",
+                "step": "REQUEST_CREATED",
+                "active": false,
+                "updatedAt": "2026-01-24T12:34:56.789Z"
+            },
+            {
+                "id": "uuid",
+                "step": "IN_TRANSIT",
+                "active": true,
+                "updatedAt": "2026-01-24T12:40:00.000Z"
+            }
+        ],
+        "courier": {
+            "name": "Courier name",
+            "phone": "+2348012345678",
+            "profilePhoto": "https://cdn.waysdrop.com/....jpg",
+            "currentLocation": {
+                "country": "Nigeria",
+                "state": "Lagos",
+                "lgaOrCity": "Ikeja",
+                "loc": { "lat": 6.6018, "lon": 3.3515 }
+            },
+            "eta": {
+                "from": "2026-01-24T12:50:00.000Z",
+                "to": "2026-01-24T13:30:00.000Z"
+            },
+            "fleet": {
+                "regNo": "ABC-123",
+                "make": "Honda",
+                "model": "CBR",
+                "colour": "Red",
+                "typeId": "uuid"
+            }
+        }
     }
-  }
 }
 ```
 

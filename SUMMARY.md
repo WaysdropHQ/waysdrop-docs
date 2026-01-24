@@ -9,4 +9,4 @@
 ## API reference
 
 - [API module](api-reference/api.mdx)
-
+- [File](api-reference/file.mdx)
