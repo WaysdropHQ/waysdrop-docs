@@ -283,6 +283,8 @@ Create a delivery request (P2P).
     "destinationContactName": "John Doe",
     "packagesId": ["uuid-1", "uuid-2"],
     "type": "PICKUP",
+    "courierSelection": "ANYONE",
+    "courierId": "uuid",
     "urgencyType": "PRIORITY",
     "deliveryDate": "2026-01-24",
     "deliverySlot": "04:00 - 14:00",
@@ -299,6 +301,7 @@ Create a delivery request (P2P).
 - `deliveryDate` and `deliverySlot` are only required if `urgencyType` is `SCHEDULED`.
 - `type` can either be `PICKUP` or `DROP_OFF`.
 - `requireProofCode` is optional (default: `false`). If set to `true`, codes will be sent to the origin and destination contact info. The user will need to provide proof of collection and delivery codes to the courier upon each interaction.
+- `courierSelection` is required and can either be `ANYONE` or `SPECIFIC`. If set to `SPECIFIC`, you must provide a `courierId` in the request body. This means you have your own courier in our system and want to assign them to the delivery.
 
 **201 Response**
 
