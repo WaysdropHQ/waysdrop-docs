@@ -10,7 +10,7 @@ Base path: `/api`
 This module is intended for third‑party integrations. All endpoints require the `api-key` header.
 
 ```bash
-curl -X GET "https://api.waysdrop.com/api/regions?search=north" \
+curl -X GET "https://api.waysdrop.com/api/countries?search=nigeria" \
   -H "api-key: wsp_live_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 ```
 
@@ -21,7 +21,7 @@ curl -X GET "https://api.waysdrop.com/api/regions?search=north" \
 ```json
 {
     "success": true,
-    "message": "Regions fetched successfully",
+    "message": "Countries fetched successfully",
     "data": [
         { "name": "North Central", "value": "NC", "zone": "North" },
         { "name": "South West", "value": "SW", "zone": "South" }
@@ -37,11 +37,39 @@ Some endpoints return `204 No Content` with an empty body.
 
 Errors are returned using the global error envelope described in [Errors](../get-started/errors).
 
+## Address input
+
+Endpoints that accept `origin` and `destination` support two formats:
+
+**Legacy string** — geocoded server-side:
+
+```json
+"origin": "Ladipo Kuku Street, Ikeja Lagos"
+```
+
+**Object (preferred)** — coordinates or Google Place ID are resolved first; the address string is optional when `lat`/`lon` or `googlePlaceId` is provided:
+
+```json
+"origin": {
+    "address": "Ladipo Kuku Street, Ikeja Lagos",
+    "lat": 6.6018,
+    "lon": 3.3515,
+    "googlePlaceId": "ChIJ....."
+}
+```
+
+| Field           | Type              | Description                                                                |
+| --------------- | ----------------- | -------------------------------------------------------------------------- |
+| `address`       | string (optional) | Human-readable address. Optional when coordinates or place ID are provided |
+| `lat`           | number (optional) | Latitude from map picker — preferred over string geocoding                 |
+| `lon`           | number (optional) | Longitude from map picker — preferred over string geocoding                |
+| `googlePlaceId` | string (optional) | Google Place ID from map picker                                            |
+
 ## Endpoints
 
-### GET /api/regions
+### GET /api/countries
 
-Fetch available regions.
+Fetch available countries (regional zones).
 
 **Query**
 
@@ -52,7 +80,7 @@ Fetch available regions.
 ```json
 {
     "success": true,
-    "message": "Regions fetched successfully",
+    "message": "Countries fetched successfully",
     "data": [
         { "name": "North Central", "value": "NC", "zone": "North" },
         { "name": "South West", "value": "SW", "zone": "South" }
@@ -131,7 +159,11 @@ Get route data between two addresses.
 
 ```json
 {
-    "origin": "Ladipo Kuku Street, Ikeja Lagos",
+    "origin": {
+        "address": "Ladipo Kuku Street, Ikeja Lagos",
+        "lat": 6.6018,
+        "lon": 3.3515
+    },
     "destination": "Adewole Estate, Surulere Lagos"
 }
 ```
@@ -199,23 +231,37 @@ Fetch available fleet types.
             "id": "uuid",
             "name": "Bike",
             "icon": "https://cdn.waysdrop.com/fleets/bike.png",
-            "minWeight": "0.00",
-            "maxWeight": "5.00",
-            "description": "Small packages",
-            "status": "ACTIVE",
-            "createdAt": "2026-01-24T12:34:56.789Z",
-            "updatedAt": "2026-01-24T12:34:56.789Z",
-            "deletedAt": null
+            "description": "Small packages"
         }
     ]
 }
 ```
 
+Only active fleet types are returned.
+
 ### POST /api/pricing
 
-Get pricing for a delivery request.
+Get pricing for a delivery request. Two pricing modes are supported — use one or the other.
 
-**Body**
+**Mode A — by package IDs (preferred)**
+
+Resolves weight and value from your saved packages. Matches the pricing logic used by `POST /api/request`. Requires an authenticated user (API key owner).
+
+```json
+{
+    "origin": "Ladipo Kuku Street, Ikeja Lagos",
+    "destination": "Adewole Estate, Surulere Lagos",
+    "packagesId": ["uuid-1", "uuid-2"],
+    "urgencyType": "PRIORITY",
+    "fleetTypeId": "uuid",
+    "courierSelection": "ANYONE",
+    "deliveryFeePayer": "CREATOR"
+}
+```
+
+**Mode B — by weight and value**
+
+Provide totals directly when you do not have saved packages.
 
 ```json
 {
@@ -224,13 +270,29 @@ Get pricing for a delivery request.
     "totalWeight": 100,
     "totalValue": 1000,
     "urgencyType": "PRIORITY",
-    "slot": "10:00 - 13:00",
     "fleetTypeId": "uuid",
-    "useInsurance": true
+    "courierSelection": "ANYONE"
 }
 ```
 
-`slot` is required when `urgencyType` is `SCHEDULED`.
+**Body fields**
+
+| Field              | Type             | Required  | Description                                                                         |
+| ------------------ | ---------------- | --------- | ----------------------------------------------------------------------------------- |
+| `origin`           | string \| object | Yes       | Pickup address (see [Address input](#address-input))                                |
+| `destination`      | string \| object | Yes       | Drop-off address                                                                    |
+| `packagesId`       | string[]         | Mode A    | Package UUIDs — preferred; resolves weight/value automatically                      |
+| `totalWeight`      | number           | Mode B    | Total weight in kg. Required when `packagesId` is omitted                           |
+| `totalValue`       | number           | Mode B    | Total value in NGN. Required when `packagesId` is omitted                           |
+| `urgencyType`      | enum             | No        | `PRIORITY`, `STANDARD`, or `SCHEDULED`                                              |
+| `deliveryDate`     | string           | SCHEDULED | Date in `YYYY-MM-DD` format                                                         |
+| `deliverySlot`     | string           | SCHEDULED | Time window, e.g. `04:00 - 14:00`                                                   |
+| `slot`             | string           | SCHEDULED | Alias for `deliverySlot`                                                            |
+| `fleetTypeId`      | uuid             | No        | Fleet type override. If incompatible with weight, the first compatible type is used |
+| `courierSelection` | enum             | No        | `ANYONE` (default) or `SPECIFIC`                                                    |
+| `courierId`        | uuid             | SPECIFIC  | Courier profile ID when `courierSelection` is `SPECIFIC`                            |
+| `courierProfileId` | uuid             | No        | Alias for `courierId`                                                               |
+| `deliveryFeePayer` | enum             | No        | `CREATOR` (default), `RECIPIENT`, or `SPLIT`. Who pays the delivery fee             |
 
 **200 Response**
 
@@ -266,7 +328,12 @@ Get pricing for a delivery request.
 
 - `distance` is computed from coordinates after geofencing.
 - `costs` values are decimals and may be returned as strings.
-- If you pass a `fleetTypeId` that is not compatible with the weight, the API will price using the first compatible recommendation.
+- If you pass a `fleetTypeId` that is not compatible with the weight, the API prices using the first compatible recommendation.
+
+**Common errors**
+
+- `400` `Provide packagesId or both totalWeight and totalValue`
+- `400` `Authenticated user is required when pricing by packagesId`
 
 ### POST /api/request
 
@@ -276,32 +343,71 @@ Create a delivery request (P2P).
 
 ```json
 {
-    "origin": "Ladipo Kuku Street, Ikeja Lagos",
+    "origin": {
+        "address": "Ladipo Kuku Street, Ikeja Lagos",
+        "lat": 6.6018,
+        "lon": 3.3515
+    },
     "destination": "Adewole Estate, Surulere Lagos",
+    "originContactEmail": "sender@example.com",
+    "originContactPhone": "+2348012345678",
+    "originContactName": "Jane Sender",
     "destinationContactEmail": "user@example.com",
     "destinationContactPhone": "+2348012345678",
     "destinationContactName": "John Doe",
     "packagesId": ["uuid-1", "uuid-2"],
     "type": "PICKUP",
     "courierSelection": "ANYONE",
-    "courierId": "uuid",
     "urgencyType": "PRIORITY",
     "deliveryDate": "2026-01-24",
     "deliverySlot": "04:00 - 14:00",
     "fleetTypeId": "uuid",
-    "requireProofCode": true,
+    "requireCollectionProofCode": true,
+    "requireDeliveryProofCode": true,
+    "deliveryFeePayer": "CREATOR",
+    "payOnDelivery": false,
+    "paymentMethodType": "WALLET",
     "link3rdPartyByContactInfo": true,
-    "useInsurance": false,
     "note": "Any additional notes"
 }
 ```
 
-- `originContactEmail`, `originContactPhone`, `originContactName` are optional. If omitted, they default to your user’s info. Destination contact fields are **required**.
-- `link3rdPartyByContactInfo` is optional (default: `false`). If set to `true`, Waysdrop uses the destination contact info to link an existing user, so they can track the delivery in the mobile app.
-- `deliveryDate` and `deliverySlot` are only required if `urgencyType` is `SCHEDULED`.
-- `type` can either be `PICKUP` or `DROP_OFF`.
-- `requireProofCode` is optional (default: `false`). If set to `true`, codes will be sent to the origin and destination contact info. The user will need to provide proof of collection and delivery codes to the courier upon each interaction.
-- `courierSelection` is required and can either be `ANYONE` or `SPECIFIC`. If set to `SPECIFIC`, you must provide a `courierId` in the request body. This means you have your own courier in our system and want to assign them to the delivery.
+**Body fields**
+
+| Field                        | Type             | Required  | Description                                                                                                                              |
+| ---------------------------- | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `origin`                     | string \| object | Yes       | Pickup address                                                                                                                           |
+| `destination`                | string \| object | Yes       | Drop-off address                                                                                                                         |
+| `originContactEmail`         | string           | No        | Defaults to your account email if omitted                                                                                                |
+| `originContactPhone`         | string           | No        | Defaults to your account phone if omitted                                                                                                |
+| `originContactName`          | string           | No        | Defaults to your account name if omitted                                                                                                 |
+| `destinationContactEmail`    | string           | Yes       | Recipient email                                                                                                                          |
+| `destinationContactPhone`    | string           | Yes       | Recipient phone (E.164)                                                                                                                  |
+| `destinationContactName`     | string           | Yes       | Recipient name                                                                                                                           |
+| `note`                       | string           | No        | Delivery notes (max 128 chars)                                                                                                           |
+| `link3rdPartyByContactInfo`  | boolean          | No        | Default `false`. If `true`, notifies the recipient on the Waysdrop app and links the delivery to their account when contact info matches |
+| `notify3rdParty`             | boolean          | No        | Alias for `link3rdPartyByContactInfo`                                                                                                    |
+| `packagesId`                 | string[]         | Yes       | Package UUIDs to deliver                                                                                                                 |
+| `type`                       | enum             | Yes       | `PICKUP` or `DROP_OFF`                                                                                                                   |
+| `urgencyType`                | enum             | No        | `PRIORITY`, `STANDARD`, or `SCHEDULED`                                                                                                   |
+| `deliveryDate`               | string           | SCHEDULED | Required when `urgencyType` is `SCHEDULED`                                                                                               |
+| `deliverySlot`               | string           | SCHEDULED | Time window, e.g. `04:00 - 14:00`                                                                                                        |
+| `fleetTypeId`                | uuid             | No        | Fleet type override                                                                                                                      |
+| `requireCollectionProofCode` | boolean          | No        | Default `true`. Sends a collection proof code to origin contact                                                                          |
+| `requireDeliveryProofCode`   | boolean          | No        | Default `true`. Ignored when `payOnDelivery` is `true` (POD uses its own proof flow)                                                     |
+| `deliveryFeePayer`           | enum             | No        | Default `CREATOR`. `CREATOR` debits Merchant Wallet; `RECIPIENT` or `SPLIT` for other arrangements                                       |
+| `payOnDelivery`              | boolean          | No        | Default `false`. Enable pay-on-delivery collection                                                                                       |
+| `podRemitTo`                 | enum             | POD       | Required when `payOnDelivery` is `true`. `MY_WALLET` (default) or `COURIER_WALLET`                                                       |
+| `podCourierProfileId`        | uuid             | POD       | Required when `podRemitTo` is `COURIER_WALLET`                                                                                           |
+| `paymentMethodType`          | enum             | No        | Default `WALLET`. `WALLET` or `CHECKOUT`                                                                                                 |
+| `courierSelection`           | enum             | Yes       | `ANYONE`, `SPECIFIC`, or `MERCHANT_SPECIAL_COURIERS`                                                                                     |
+| `courierId`                  | uuid             | SPECIFIC  | Required when `courierSelection` is `SPECIFIC`                                                                                           |
+
+**Courier selection**
+
+- `ANYONE` — any available courier on the platform
+- `SPECIFIC` — assign a courier you already have in the system (`courierId` required)
+- `MERCHANT_SPECIAL_COURIERS` — assign from your merchant-specific courier list (requires couriers added in the merchant dashboard)
 
 **201 Response**
 
@@ -355,6 +461,7 @@ Create a delivery request (P2P).
 - `400` `Invalid packages selection`
 - `400` `Origin and destination cannot be the same`
 - `404` `Fleet type not found`
+- `404` `No merchant specific couriers found` (when using `MERCHANT_SPECIAL_COURIERS` without configured couriers)
 
 ### POST /api/request/:deliveryId/cancel
 
@@ -620,3 +727,4 @@ Get a delivery (for the authenticated user).
 
 - `courier` is `null` until the delivery is assigned. When present, it contains an ETA window computed from live location.
 - `deliverySteps` are filtered to visible steps only (hidden steps are not returned).
+- Proof `code` is only returned after the proof has been scanned.

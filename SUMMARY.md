@@ -3,6 +3,7 @@
 ## Get started
 
 - [API keys](get-started/api-keys.mdx)
+- [OAuth](get-started/oauth.mdx)
 - [Errors](get-started/errors.mdx)
 - [Webhooks](get-started/webhooks.mdx)
 

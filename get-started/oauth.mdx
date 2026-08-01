@@ -1,0 +1,489 @@
+# OAuth
+
+OAuth lets third-party apps sign users in with Waysdrop and access scoped profile data. It is separate from [API keys](api-keys) — API keys authenticate **your** server to the delivery API; OAuth lets **your users** authorize **your app** to act on their behalf.
+
+## OAuth vs API keys
+
+|                      | API keys                             | OAuth                                  |
+| -------------------- | ------------------------------------ | -------------------------------------- |
+| **Purpose**          | Server-to-server delivery API access | User sign-in and scoped profile access |
+| **Auth header**      | `api-key: wsp_live_...`              | `Authorization: Bearer <access_token>` |
+| **Created in**       | API Keys page                        | OAuth Apps page                        |
+| **User interaction** | None                                 | Login + consent screen                 |
+
+## Environments
+
+| Environment | API / OAuth issuer                 | Dashboard                                  |
+| ----------- | ---------------------------------- | ------------------------------------------ |
+| Live        | `https://api.waysdrop.com`         | https://api-dashboard.waysdrop.com         |
+| Staging     | `https://staging-api.waysdrop.com` | https://staging-api-dashboard.waysdrop.com |
+
+Discovery document: `GET {issuer}/oauth/.well-known/openid-configuration`
+
+---
+
+## Step 1 — Open OAuth Apps in the dashboard
+
+1. Sign in to the [API dashboard](https://api-dashboard.waysdrop.com) (or [staging](https://staging-api-dashboard.waysdrop.com)).
+2. In the sidebar, open **OAuth Apps**.
+
+This page lists every OAuth application tied to your account. OAuth apps are for **Sign in with Waysdrop** — they are not API keys.
+
+---
+
+## Step 2 — Create an OAuth app
+
+Click **Create App** and fill in the form:
+
+| Field             | Required | Description                                                                                                                 |
+| ----------------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **App name**      | Yes      | Display name shown on the login and consent screens                                                                         |
+| **Description**   | No       | Short summary of what your app does                                                                                         |
+| **Logo URL**      | No       | Absolute URL to your app logo                                                                                               |
+| **Homepage URL**  | No       | Your app's public website                                                                                                   |
+| **Redirect URIs** | Yes (≥1) | Callback URLs after authorization. Must use `https://`, except `http://localhost` and `http://127.0.0.1`. No URL fragments. |
+| **Permissions**   | Yes      | Scopes your app may request (see [Scopes](#scopes))                                                                         |
+| **Client type**   | Yes      | `CONFIDENTIAL` (server-side, uses a secret) or `PUBLIC` (SPA / native, PKCE required, no secret)                            |
+
+**Default scopes** (`openid`, `profile`, `email`) are always included and cannot be removed.
+
+Click **Create App** when done.
+
+---
+
+## Step 3 — Save your Client ID and Client Secret
+
+After creation, a modal shows your credentials:
+
+- **Client ID** — format: `wdo_{env}_{32 hex chars}` (e.g. `wdo_live_a1b2c3...`). Safe to expose in client-side code.
+- **Client Secret** — format: `wdos_{64 hex chars}`. Shown **once**. Store it securely; it cannot be retrieved again.
+
+<Warning>
+    Copy the client secret immediately. If you lose it, open the app details →
+    **Credentials** tab → **Regenerate secret**. The old secret is invalidated
+    instantly.
+</Warning>
+
+On the app details page you can also:
+
+- Copy OAuth endpoints (authorize, token, userinfo, revoke)
+- Edit redirect URIs and permissions
+- Activate / deactivate the app
+- Delete the app (soft-deletes, revokes all grants and refresh tokens)
+
+---
+
+## Step 4 — Redirect the user to authorize
+
+Send the user's browser to the authorization endpoint:
+
+```
+GET {issuer}/oauth/authorize
+```
+
+**Query parameters**
+
+| Parameter               | Required       | Description                                                 |
+| ----------------------- | -------------- | ----------------------------------------------------------- |
+| `response_type`         | Yes            | Must be `code`                                              |
+| `client_id`             | Yes            | Your client ID                                              |
+| `redirect_uri`          | Yes            | Must exactly match a registered redirect URI                |
+| `scope`                 | No             | Space-separated scopes (defaults to `openid profile email`) |
+| `state`                 | Recommended    | CSRF token — verify it on callback                          |
+| `code_challenge`        | Public clients | PKCE challenge (required for `PUBLIC` clients)              |
+| `code_challenge_method` | Public clients | `S256` (recommended) or `plain`                             |
+
+**Example authorize URL (confidential client)**
+
+```
+https://api.waysdrop.com/oauth/authorize?response_type=code&client_id=wdo_live_abc123...&redirect_uri=https%3A%2F%2Fexample.com%2Foauth%2Fcallback&scope=openid%20profile%20email%20store&state=random_csrf_token
+```
+
+**What the user sees**
+
+1. **Sign in** — Waysdrop login (email or phone + password)
+2. **Consent** — Lists requested permissions; user clicks **Authorize** or **Cancel**
+
+On success, the user is redirected to your `redirect_uri` with:
+
+```
+https://example.com/oauth/callback?code=<authorization_code>&state=random_csrf_token
+```
+
+On denial:
+
+```
+https://example.com/oauth/callback?error=access_denied&error_description=The+user+denied+the+request&state=random_csrf_token
+```
+
+Authorization codes expire in ~2 minutes and are single-use.
+
+---
+
+## Step 5 — Exchange the code for tokens
+
+Exchange the authorization code at the token endpoint:
+
+```
+POST {issuer}/oauth/token
+Content-Type: application/json
+```
+
+**Authorization code grant**
+
+```json
+{
+    "grant_type": "authorization_code",
+    "code": "<authorization_code>",
+    "redirect_uri": "https://example.com/oauth/callback",
+    "client_id": "wdo_live_abc123...",
+    "client_secret": "wdos_...",
+    "code_verifier": "<pkce_verifier>"
+}
+```
+
+`client_secret` is required for confidential clients. `code_verifier` is required when PKCE was used during authorization.
+
+**200 Response**
+
+```json
+{
+    "access_token": "eyJhbGciOiJIUzI1NiIs...",
+    "token_type": "Bearer",
+    "expires_in": 3600,
+    "refresh_token": "wdor_...",
+    "scope": "openid profile email store"
+}
+```
+
+---
+
+## Step 6 — Use the access token in your app
+
+Send the access token as a Bearer token:
+
+```bash
+curl -X GET "https://api.waysdrop.com/oauth/userinfo" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..."
+```
+
+**Userinfo response** (fields depend on granted scopes)
+
+```json
+{
+    "sub": "user-uuid",
+    "email": "user@example.com",
+    "email_verified": true,
+    "name": "Jane Doe",
+    "picture": "https://cdn.waysdrop.com/...",
+    "phone": "+2348012345678",
+    "phone_verified": true,
+    "personal_profile": {
+        "id": "profile-uuid",
+        "name": "Jane Doe",
+        "tag": "jane_doe",
+        "profile_photo": "https://cdn.waysdrop.com/..."
+    },
+    "store_profiles": [],
+    "courier_profiles": []
+}
+```
+
+Use `sub` as the stable user identifier in your database.
+
+---
+
+## Refresh tokens
+
+When the access token expires, refresh it:
+
+```json
+POST {issuer}/oauth/token
+
+{
+  "grant_type": "refresh_token",
+  "refresh_token": "wdor_...",
+  "client_id": "wdo_live_abc123...",
+  "client_secret": "wdos_..."
+}
+```
+
+Each refresh rotates the refresh token — store the new one and discard the old.
+
+---
+
+## Revoke tokens
+
+Revoke a refresh token:
+
+```json
+POST {issuer}/oauth/revoke
+
+{
+  "token": "wdor_...",
+  "client_id": "wdo_live_abc123...",
+  "client_secret": "wdos_..."
+}
+```
+
+Returns `{ "revoked": true }`. Access tokens are short-lived JWTs and expire on their own.
+
+---
+
+## Scopes
+
+| Scope     | Always included | Description                          |
+| --------- | --------------- | ------------------------------------ |
+| `openid`  | Yes             | Verify Waysdrop identity             |
+| `profile` | Yes             | Name, phone, personal profile        |
+| `email`   | Yes             | Email address                        |
+| `store`   | No              | Store profiles, products, and orders |
+| `courier` | No              | Courier profile and deliveries       |
+
+Only scopes listed in your app's **allowed scopes** can be requested. The consent screen shows exactly what the user is granting.
+
+---
+
+## PKCE (public clients)
+
+`PUBLIC` clients (SPAs, mobile apps) **must** use PKCE:
+
+1. Generate a random `code_verifier` (43–128 chars)
+2. Compute `code_challenge = BASE64URL(SHA256(code_verifier))`
+3. Send `code_challenge` and `code_challenge_method=S256` on authorize
+4. Send `code_verifier` on token exchange
+
+Public clients do not receive a client secret.
+
+---
+
+## Code examples
+
+### TypeScript (confidential server)
+
+```typescript
+import crypto from "node:crypto";
+
+const ISSUER = "https://api.waysdrop.com";
+const CLIENT_ID = process.env.WAYSDROP_CLIENT_ID!;
+const CLIENT_SECRET = process.env.WAYSDROP_CLIENT_SECRET!;
+const REDIRECT_URI = "https://example.com/oauth/callback";
+
+// Step 1 — Build authorize URL (optionally with PKCE for defense in depth)
+export function buildAuthorizeUrl(state: string): string {
+    const params = new URLSearchParams({
+        response_type: "code",
+        client_id: CLIENT_ID,
+        redirect_uri: REDIRECT_URI,
+        scope: "openid profile email store",
+        state,
+    });
+    return `${ISSUER}/oauth/authorize?${params}`;
+}
+
+// Step 2 — Exchange authorization code for tokens
+export async function exchangeCode(code: string) {
+    const res = await fetch(`${ISSUER}/oauth/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            grant_type: "authorization_code",
+            code,
+            redirect_uri: REDIRECT_URI,
+            client_id: CLIENT_ID,
+            client_secret: CLIENT_SECRET,
+        }),
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<{
+        access_token: string;
+        refresh_token: string;
+        expires_in: number;
+        scope: string;
+    }>;
+}
+
+// Step 3 — Fetch user profile
+export async function fetchUserinfo(accessToken: string) {
+    const res = await fetch(`${ISSUER}/oauth/userinfo`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+}
+
+// Step 4 — Refresh when access token expires
+export async function refreshTokens(refreshToken: string) {
+    const res = await fetch(`${ISSUER}/oauth/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            grant_type: "refresh_token",
+            refresh_token: refreshToken,
+            client_id: CLIENT_ID,
+            client_secret: CLIENT_SECRET,
+        }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+}
+
+// PKCE helpers (required for PUBLIC clients)
+export function generatePkce() {
+    const verifier = crypto.randomBytes(32).toString("base64url");
+    const challenge = crypto
+        .createHash("sha256")
+        .update(verifier)
+        .digest("base64url");
+    return { verifier, challenge };
+}
+```
+
+### Golang (confidential server)
+
+```go
+package waysdrop
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+)
+
+const issuer = "https://api.waysdrop.com"
+
+var (
+	clientID     = os.Getenv("WAYSDROP_CLIENT_ID")
+	clientSecret = os.Getenv("WAYSDROP_CLIENT_SECRET")
+	redirectURI  = "https://example.com/oauth/callback"
+)
+
+type TokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	TokenType    string `json:"token_type"`
+	ExpiresIn    int    `json:"expires_in"`
+	RefreshToken string `json:"refresh_token"`
+	Scope        string `json:"scope"`
+}
+
+type Userinfo struct {
+	Sub   string `json:"sub"`
+	Email string `json:"email"`
+	Name  string `json:"name"`
+}
+
+// BuildAuthorizeURL returns the URL to redirect the user's browser to.
+func BuildAuthorizeURL(state string) string {
+	params := url.Values{}
+	params.Set("response_type", "code")
+	params.Set("client_id", clientID)
+	params.Set("redirect_uri", redirectURI)
+	params.Set("scope", "openid profile email store")
+	params.Set("state", state)
+	return fmt.Sprintf("%s/oauth/authorize?%s", issuer, params.Encode())
+}
+
+// ExchangeCode trades an authorization code for access and refresh tokens.
+func ExchangeCode(code string) (*TokenResponse, error) {
+	body, _ := json.Marshal(map[string]string{
+		"grant_type":    "authorization_code",
+		"code":          code,
+		"redirect_uri":  redirectURI,
+		"client_id":     clientID,
+		"client_secret": clientSecret,
+	})
+
+	resp, err := http.Post(issuer+"/oauth/token", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("token exchange failed: %s", b)
+	}
+
+	var tokens TokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tokens); err != nil {
+		return nil, err
+	}
+	return &tokens, nil
+}
+
+// FetchUserinfo returns the authenticated user's profile.
+func FetchUserinfo(accessToken string) (*Userinfo, error) {
+	req, _ := http.NewRequest(http.MethodGet, issuer+"/oauth/userinfo", nil)
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("userinfo failed: %s", b)
+	}
+
+	var info Userinfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return nil, err
+	}
+	return &info, nil
+}
+
+// RefreshTokens rotates the refresh token and returns new tokens.
+func RefreshTokens(refreshToken string) (*TokenResponse, error) {
+	body, _ := json.Marshal(map[string]string{
+		"grant_type":    "refresh_token",
+		"refresh_token": refreshToken,
+		"client_id":     clientID,
+		"client_secret": clientSecret,
+	})
+
+	resp, err := http.Post(issuer+"/oauth/token", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var tokens TokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tokens); err != nil {
+		return nil, err
+	}
+	return &tokens, nil
+}
+```
+
+---
+
+## OAuth endpoints reference
+
+| Endpoint                            | Method | Description                        |
+| ----------------------------------- | ------ | ---------------------------------- |
+| `/.well-known/openid-configuration` | GET    | OpenID Connect discovery           |
+| `/oauth/authorize`                  | GET    | Start authorization (browser)      |
+| `/oauth/authorize/login`            | POST   | Login during authorize flow        |
+| `/oauth/authorize/consent`          | POST   | Approve or deny consent            |
+| `/oauth/token`                      | POST   | Exchange code or refresh tokens    |
+| `/oauth/userinfo`                   | GET    | User profile (Bearer access token) |
+| `/oauth/revoke`                     | POST   | Revoke a refresh token             |
+
+App management endpoints (`/oauth/apps/*`) require a dashboard session JWT — they are for creating and managing apps, not for the end-user OAuth flow.
+
+## Common errors
+
+| Error                                                | Cause                                                |
+| ---------------------------------------------------- | ---------------------------------------------------- |
+| `redirect_uri does not match registration`           | Callback URL not in your app's redirect URIs         |
+| `PKCE code_challenge is required for public clients` | Missing PKCE on a `PUBLIC` client                    |
+| `Invalid authorization code`                         | Code expired, already used, or wrong client          |
+| `client_secret is required`                          | Confidential client missing secret on token exchange |
+| `Authorization has been revoked`                     | User revoked access; re-authorize                    |

@@ -19,7 +19,7 @@ API keys are environment-specific. Grab your key from:
 Send your API key using the `api-key` header:
 
 ```bash
-curl -X GET "https://api.waysdrop.com/api/regions?search=lagos" \
+curl -X GET "https://api.waysdrop.com/api/countries?search=lagos" \
   -H "api-key: wsp_live_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 ```
 
@@ -51,13 +51,13 @@ All errors use the standard envelope described in [Errors](errors.mdx).
 
 ```json
 {
-  "statusCode": 401,
-  "method": "GET",
-  "timestamp": "2026-01-24T12:34:56.789Z",
-  "path": "/api/regions",
-  "url": "https://api.waysdrop.com/api/regions",
-  "message": "API key is required",
-  "environment": "live"
+    "statusCode": 401,
+    "method": "GET",
+    "timestamp": "2026-01-24T12:34:56.789Z",
+    "path": "/api/countries",
+    "url": "https://api.waysdrop.com/api/countries",
+    "message": "API key is required",
+    "environment": "live"
 }
 ```
 
@@ -65,13 +65,13 @@ All errors use the standard envelope described in [Errors](errors.mdx).
 
 ```json
 {
-  "statusCode": 401,
-  "method": "GET",
-  "timestamp": "2026-01-24T12:34:56.789Z",
-  "path": "/api/regions",
-  "url": "https://api.waysdrop.com/api/regions",
-  "message": "Invalid API key format",
-  "environment": "live"
+    "statusCode": 401,
+    "method": "GET",
+    "timestamp": "2026-01-24T12:34:56.789Z",
+    "path": "/api/countries",
+    "url": "https://api.waysdrop.com/api/countries",
+    "message": "Invalid API key format",
+    "environment": "live"
 }
 ```
 
@@ -79,13 +79,13 @@ All errors use the standard envelope described in [Errors](errors.mdx).
 
 ```json
 {
-  "statusCode": 429,
-  "method": "GET",
-  "timestamp": "2026-01-24T12:34:56.789Z",
-  "path": "/api/regions",
-  "url": "https://api.waysdrop.com/api/regions",
-  "message": "API quota exceeded",
-  "environment": "live"
+    "statusCode": 429,
+    "method": "GET",
+    "timestamp": "2026-01-24T12:34:56.789Z",
+    "path": "/api/countries",
+    "url": "https://api.waysdrop.com/api/countries",
+    "message": "API quota exceeded",
+    "environment": "live"
 }
 ```
 

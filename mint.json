@@ -13,6 +13,7 @@
             "group": "Get started",
             "pages": [
                 "get-started/api-keys",
+                "get-started/oauth",
                 "get-started/errors",
                 "get-started/webhooks"
             ]
