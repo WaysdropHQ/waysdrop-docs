@@ -21,11 +21,8 @@ curl -X GET "https://api.waysdrop.com/api/countries?search=nigeria" \
 ```json
 {
     "success": true,
-    "message": "Countries fetched successfully",
-    "data": [
-        { "name": "North Central", "value": "NC", "zone": "North" },
-        { "name": "South West", "value": "SW", "zone": "South" }
-    ]
+    "message": "<human-readable message>",
+    "data": {}
 }
 ```
 
@@ -37,39 +34,117 @@ Some endpoints return `204 No Content` with an empty body.
 
 Errors are returned using the global error envelope described in [Errors](../get-started/errors).
 
-## Address input
+### Conventions
 
-Endpoints that accept `origin` and `destination` support two formats:
+- **Decimals** — Prisma `Decimal` fields serialize as **strings** in JSON (e.g. `"1650.00"`, `"2.00000"`).
+- **Coordinates** — Resolved locations use flat `lat` / `lon` numbers, not a nested `loc` object.
+- **Optional fields** — Geo/admin fields on resolved addresses vary by what was geocoded; omitted keys are not returned.
+
+## Origin and destination
+
+Endpoints that accept `origin` and `destination` (`POST /api/route`, `POST /api/pricing`, `POST /api/request`) use the same address model. You can send a **plain string**, a **minimal geocode object**, or a **full resolved object** from your map picker.
+
+### Request input
 
 **Legacy string** — geocoded server-side:
 
 ```json
-"origin": "Ladipo Kuku Street, Ikeja Lagos"
+"origin": "Agege, Lagos, Nigeria"
 ```
 
-**Object (preferred)** — coordinates or Google Place ID are resolved first; the address string is optional when `lat`/`lon` or `googlePlaceId` is provided:
+**Minimal object** — preferred when you have coordinates or a place ID:
 
 ```json
 "origin": {
-    "address": "Ladipo Kuku Street, Ikeja Lagos",
-    "lat": 6.6018,
-    "lon": 3.3515,
-    "googlePlaceId": "ChIJ....."
+    "address": "Agege, Lagos, Nigeria",
+    "lat": 6.617973099999999,
+    "lon": 3.3208916,
+    "googlePlaceId": "ChIJNSzoPHOROxARYADX4-24Io0"
 }
 ```
 
-| Field           | Type              | Description                                                                |
-| --------------- | ----------------- | -------------------------------------------------------------------------- |
-| `address`       | string (optional) | Human-readable address. Optional when coordinates or place ID are provided |
-| `lat`           | number (optional) | Latitude from map picker — preferred over string geocoding                 |
-| `lon`           | number (optional) | Longitude from map picker — preferred over string geocoding                |
-| `googlePlaceId` | string (optional) | Google Place ID from map picker                                            |
+**Full object** — pass the resolved shape from your map picker or a prior `/api/route` response. Extra geo/admin fields are preserved; geocoding uses `address` (or `addressLine1`), `lat`/`lon`, and `googlePlaceId`.
+
+| Input field      | Type              | Description                                                                 |
+| ---------------- | ----------------- | --------------------------------------------------------------------------- |
+| `address`        | string (optional) | Free-text address for geocoding. Alias for `addressLine1` when pre-resolved |
+| `lat` / `lon`    | number (optional) | Coordinates from map picker — preferred over string geocoding               |
+| `googlePlaceId`  | string (optional) | Google Place ID from map picker                                             |
+| `floor`          | string (optional) | Floor or unit                                                               |
+| `contactName`    | string (optional) | Contact at this stop                                                        |
+| `contactPhone`   | string (optional) | E.164 phone at this stop                                                    |
+| `contactEmail`   | string (optional) | Email at this stop                                                          |
+| `additionalNote` | string (optional) | Note for this stop (stored as `note`)                                       |
+| `id`             | uuid (optional)   | Saved address ID — skips geocoding when valid                               |
+
+On `POST /api/request`, origin contact fields can also be set at the top level (`originContactName`, `originContactPhone`, `originContactEmail`). Top-level destination contact fields are **required** unless already present on the `destination` object.
+
+### Resolved address object
+
+After geocoding (in `/api/route` responses, delivery records, etc.), `origin` and `destination` resolve to this shape. All fields except `country` are optional — presence depends on the geocode result.
+
+```json
+{
+    "country": "Nigeria",
+    "zipCode": "102212",
+    "countryCode": "NG",
+    "lat": 6.617973099999999,
+    "lon": 3.3208916,
+    "googlePlaceId": "ChIJNSzoPHOROxARYADX4-24Io0",
+    "addressLine1": "Agege, Lagos, Nigeria",
+    "addressLine2": "86 Oniwaya Rd, Agege, Lagos 102212, Lagos, Nigeria",
+    "timezone": "Africa/Lagos",
+    "regionName": "SW",
+    "state": "Lagos",
+    "lgaOrCity": "AGEGE",
+    "region": "SW",
+    "subregion": "Western Africa",
+    "continentCode": "AF",
+    "continentName": "Africa",
+    "countryCodeAlpha3": "NGA",
+    "adminUnitId": "NG-LAGOS-AGEGE",
+    "adminUnitName": "AGEGE",
+    "adminUnitType": "admin2",
+    "adminUnitParentId": "NG-LAGOS",
+    "admin1Id": "NG-LAGOS",
+    "admin1Name": "Lagos",
+    "admin2Id": "NG-LAGOS-AGEGE",
+    "admin2Name": "AGEGE",
+    "admin3Name": "Oniwaya/Papa-Uku",
+    "operationalRegionId": "NG-SW",
+    "h3Index": "8a5882643967fff",
+    "phrase": "domeest.ponticello.sidewall",
+    "resolution": 10,
+    "centerLat": 6.617950538557496,
+    "centerLon": 3.320709488840802,
+    "contactName": "Raheem Kawojue",
+    "contactPhone": "+2348131911964",
+    "contactEmail": "kawojue08@gmail.com",
+    "note": ""
+}
+```
+
+**Field groups**
+
+| Group                | Fields                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Display**          | `addressLine1`, `addressLine2`, `floor`, `label`                                                                                                                          |
+| **Coordinates**      | `lat`, `lon`, `centerLat`, `centerLon`, `swLat`, `swLon`, `neLat`, `neLon`                                                                                                |
+| **Country / region** | `country`, `countryCode`, `countryCodeAlpha3`, `state`, `lgaOrCity`, `zoneOrDistrict`, `region`, `regionName`, `regionalZone`, `subregion`, `zipCode`, `timezone`         |
+| **Continent**        | `continentCode`, `continentName`                                                                                                                                          |
+| **Admin hierarchy**  | `adminUnitId`, `adminUnitName`, `adminUnitType`, `adminUnitParentId`, `admin1Id`, `admin1Name`, `admin2Id`, `admin2Name`, `admin3Id`, `admin3Name`, `operationalRegionId` |
+| **Place reference**  | `googlePlaceId`                                                                                                                                                           |
+| **H3 grid**          | `h3Index`, `phrase`, `resolution`                                                                                                                                         |
+| **Contact**          | `contactName`, `contactPhone`, `contactEmail`, `note`                                                                                                                     |
+| **Persisted only**   | `id`, `createdAt`, `updatedAt`, `deletedAt` — present on stored delivery addresses                                                                                        |
+
+Persisted addresses on deliveries (`GET /api/deliveries/:deliveryId`, `POST /api/request` → `delivery.origin` / `delivery.destination`) include `id` and timestamps in addition to the fields above.
 
 ## Endpoints
 
 ### GET /api/countries
 
-Fetch available countries (regional zones).
+Fetch available countries for routing and pricing.
 
 **Query**
 
@@ -82,17 +157,35 @@ Fetch available countries (regional zones).
     "success": true,
     "message": "Countries fetched successfully",
     "data": [
-        { "name": "North Central", "value": "NC", "zone": "North" },
-        { "name": "South West", "value": "SW", "zone": "South" }
+        {
+            "value": "NG",
+            "name": "Nigeria",
+            "type": "INTER_COUNTRY",
+            "country": "Nigeria",
+            "countryCode": "NG",
+            "countryCodeAlpha3": "NGA",
+            "continentCode": "AF",
+            "continentName": "Africa",
+            "lat": 9.082,
+            "lon": 8.6753
+        }
     ]
 }
 ```
 
 **Response fields**
 
-- `name`: region name
-- `value`: region code used internally for routing/pricing
-- `zone`: broad grouping (e.g., North/South)
+| Field                             | Description                                   |
+| --------------------------------- | --------------------------------------------- |
+| `value`                           | ISO country code (e.g. `"NG"`)                |
+| `name`                            | Country display name                          |
+| `type`                            | Always `"INTER_COUNTRY"`                      |
+| `country` / `countryCode`         | Country name and ISO code                     |
+| `countryCodeAlpha3`               | ISO 3166-1 alpha-3 code                       |
+| `continentCode` / `continentName` | Continent metadata                            |
+| `lat` / `lon`                     | Country centroid coordinates (when available) |
+
+Without `search`, returns up to 50 results.
 
 ### GET /api/states
 
@@ -109,11 +202,35 @@ Fetch available states.
     "success": true,
     "message": "States fetched successfully",
     "data": [
-        { "name": "Lagos", "regionalZone": "South West" },
-        { "name": "FCT", "regionalZone": "North Central" }
+        {
+            "value": "ng-admin1-lagos",
+            "name": "Lagos",
+            "type": "INTER_STATE",
+            "state": "Lagos",
+            "country": "Nigeria",
+            "countryCode": "NG",
+            "continentCode": "AF",
+            "continentName": "Africa",
+            "regionalZone": "South West",
+            "admin1Id": "ng-admin1-lagos",
+            "admin1Name": "Lagos",
+            "lat": 6.5244,
+            "lon": 3.3792
+        }
     ]
 }
 ```
+
+**Response fields**
+
+| Field                     | Description                   |
+| ------------------------- | ----------------------------- |
+| `value`                   | State route identifier        |
+| `name`                    | State display name            |
+| `type`                    | Always `"INTER_STATE"`        |
+| `state`                   | State name                    |
+| `regionalZone`            | Broad regional grouping       |
+| `admin1Id` / `admin1Name` | Admin-1 hierarchy identifiers |
 
 ### GET /api/cities
 
@@ -131,15 +248,21 @@ Fetch available cities.
     "message": "Cities fetched successfully",
     "data": [
         {
+            "value": "ChIJ.....",
+            "locationId": "ng-lagos-ikeja",
             "googlePlaceId": "ChIJ.....",
             "country": "Nigeria",
-            "state": "Lagos",
+            "countryCode": "NG",
+            "countryCodeAlpha3": "NGA",
+            "lat": 6.6018,
+            "lon": 3.3515,
             "lgaOrCity": "Ikeja",
+            "state": "Lagos",
+            "zoneOrDistrict": "Ikeja",
             "region": "SW",
             "regionName": "South West",
             "regionalZone": "South West",
-            "zoneOrDistrict": "Ikeja",
-            "loc": { "lat": 6.6018, "lon": 3.3515 }
+            "adminUnitName": "Ikeja"
         }
     ]
 }
@@ -147,9 +270,9 @@ Fetch available cities.
 
 **Response notes**
 
-- `googlePlaceId` is the stable identifier used by routing and validation.
-- `loc` is the coordinate used for distance + ETA calculations.
-- If `search` is not provided, the API returns a limited slice (for fast autocomplete).
+- `value` is `googlePlaceId` when available, otherwise `locationId`.
+- `lat` / `lon` are the coordinates used for distance and ETA calculations.
+- Without `search`, returns up to 50 results.
 
 ### POST /api/route
 
@@ -178,34 +301,60 @@ Get route data between two addresses.
         "distance": { "distanceKm": 12.743, "etaSeconds": 1649 },
         "routeType": "INTER_CITY",
         "origin": {
-            "googlePlaceId": "ChIJ.....",
             "country": "Nigeria",
+            "zipCode": "102212",
             "countryCode": "NG",
-            "zipCode": null,
-            "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
-            "addressLine2": "Ikeja, Lagos, Nigeria",
+            "lat": 6.617973099999999,
+            "lon": 3.3208916,
+            "googlePlaceId": "ChIJNSzoPHOROxARYADX4-24Io0",
+            "addressLine1": "Agege, Lagos, Nigeria",
+            "addressLine2": "86 Oniwaya Rd, Agege, Lagos 102212, Lagos, Nigeria",
+            "timezone": "Africa/Lagos",
+            "regionName": "SW",
             "state": "Lagos",
-            "lgaOrCity": "Ikeja",
+            "lgaOrCity": "AGEGE",
             "region": "SW",
-            "regionName": "South West",
-            "regionalZone": "South West",
-            "zoneOrDistrict": "Ikeja",
-            "loc": { "lat": 6.6018, "lon": 3.3515 }
+            "subregion": "Western Africa",
+            "continentCode": "AF",
+            "continentName": "Africa",
+            "countryCodeAlpha3": "NGA",
+            "adminUnitId": "NG-LAGOS-AGEGE",
+            "adminUnitName": "AGEGE",
+            "adminUnitType": "admin2",
+            "adminUnitParentId": "NG-LAGOS",
+            "admin1Id": "NG-LAGOS",
+            "admin1Name": "Lagos",
+            "admin2Id": "NG-LAGOS-AGEGE",
+            "admin2Name": "AGEGE",
+            "admin3Name": "Oniwaya/Papa-Uku",
+            "operationalRegionId": "NG-SW",
+            "h3Index": "8a5882643967fff",
+            "phrase": "domeest.ponticello.sidewall",
+            "resolution": 10,
+            "centerLat": 6.617950538557496,
+            "centerLon": 3.320709488840802
         },
         "destination": {
-            "googlePlaceId": "ChIJ.....",
             "country": "Nigeria",
+            "zipCode": "102212",
             "countryCode": "NG",
-            "zipCode": null,
-            "addressLine1": "Adewole Estate, Surulere Lagos",
-            "addressLine2": "Surulere, Lagos, Nigeria",
+            "lat": 6.5244,
+            "lon": 3.3792,
+            "googlePlaceId": "ChIJ6cPolh-QOxAR_rCHmFNKObg",
+            "addressLine1": "Gbagada, Lagos, Nigeria",
+            "addressLine2": "Gbagada, Lagos, Nigeria",
+            "timezone": "Africa/Lagos",
+            "regionName": "SW",
             "state": "Lagos",
-            "lgaOrCity": "Surulere",
+            "lgaOrCity": "GBAGADA",
             "region": "SW",
-            "regionName": "South West",
-            "regionalZone": "South West",
-            "zoneOrDistrict": "Surulere",
-            "loc": { "lat": 6.4999, "lon": 3.3482 }
+            "subregion": "Western Africa",
+            "continentCode": "AF",
+            "continentName": "Africa",
+            "countryCodeAlpha3": "NGA",
+            "admin1Id": "NG-LAGOS",
+            "admin1Name": "Lagos",
+            "operationalRegionId": "NG-SW"
         }
     }
 }
@@ -213,8 +362,9 @@ Get route data between two addresses.
 
 **Response notes**
 
-- `distance.distanceKm` and `distance.etaSeconds` are computed using both line and road distance and then taking the max for safety.
-- `routeType` is derived from the resolved system locations (region/state/city).
+- `origin` and `destination` use the [resolved address object](#resolved-address-object) shape. Contact fields are not included unless you sent them on input.
+- `routeType` is one of `INTER_CITY`, `INTER_STATE`, `INTER_REGION`, `INTER_COUNTRY`, or `INTER_CONTINENT`.
+- `distance.distanceKm` and `distance.etaSeconds` use the max of line and road distance for safety.
 
 ### GET /api/fleet-types
 
@@ -237,7 +387,7 @@ Fetch available fleet types.
 }
 ```
 
-Only active fleet types are returned.
+Only active fleet types are returned. `icon` and `description` may be `null`.
 
 ### POST /api/pricing
 
@@ -279,7 +429,7 @@ Provide totals directly when you do not have saved packages.
 
 | Field              | Type             | Required  | Description                                                                         |
 | ------------------ | ---------------- | --------- | ----------------------------------------------------------------------------------- |
-| `origin`           | string \| object | Yes       | Pickup address (see [Address input](#address-input))                                |
+| `origin`           | string \| object | Yes       | Pickup address (see [Origin and destination](#origin-and-destination))              |
 | `destination`      | string \| object | Yes       | Drop-off address                                                                    |
 | `packagesId`       | string[]         | Mode A    | Package UUIDs — preferred; resolves weight/value automatically                      |
 | `totalWeight`      | number           | Mode B    | Total weight in kg. Required when `packagesId` is omitted                           |
@@ -294,6 +444,93 @@ Provide totals directly when you do not have saved packages.
 | `courierProfileId` | uuid             | No        | Alias for `courierId`                                                               |
 | `deliveryFeePayer` | enum             | No        | `CREATOR` (default), `RECIPIENT`, or `SPLIT`. Who pays the delivery fee             |
 
+#### Mode A response — `packagesId`
+
+**200 Response**
+
+```json
+{
+    "success": true,
+    "message": "Pricing fetched successfully",
+    "data": {
+        "deliveryCost": {
+            "distance": { "distanceKm": 12.743, "etaSeconds": 1649 },
+            "routeType": "INTER_CITY",
+            "tierIds": {
+                "countryPricingId": "uuid",
+                "statePricingId": "uuid",
+                "cityPricingId": "uuid"
+            },
+            "costs": {
+                "base": "1200.00",
+                "fleet": "100.00",
+                "deliverySubtotal": "1550.00",
+                "total": "1700.00",
+                "weight": "150.00",
+                "insurance": "0.00",
+                "surcharge": "100.00",
+                "serviceFee": "150.00"
+            },
+            "breakdown": {
+                "baseCharge": "Base distance charge for 12.74km",
+                "weightCharge": "Additional charge for 9kg",
+                "insuranceCharge": null,
+                "fleetCharge": "Fleet charge for Bike delivery",
+                "surchargeCharge": "Surcharge for PRIORITY:PRIORITY",
+                "serviceFeeCharge": "Service fee (flat) → 150.00"
+            },
+            "courierPricingRule": null,
+            "totalWeight": 9,
+            "totalValue": 250000
+        },
+        "promotion": null,
+        "deliveryFee": {
+            "payer": "CREATOR",
+            "gross": {
+                "delivery": "1550.00",
+                "serviceFee": "150.00",
+                "hubCommission": "0.00",
+                "bundledTotal": "1700.00"
+            },
+            "creator": {
+                "amount": "1700.00",
+                "paymentRequired": true,
+                "paid": false
+            },
+            "recipient": {
+                "amount": "0.00",
+                "paymentRequired": false,
+                "paid": false,
+                "checkoutUrl": null
+            },
+            "promotion": {
+                "settlementMode": null,
+                "platformFunded": false,
+                "settledAmount": "0.00",
+                "discountAmount": "0.00",
+                "isApplied": false
+            }
+        },
+        "matchingEligible": true,
+        "payOnDelivery": {
+            "enabled": false,
+            "collectAmount": "250000.00",
+            "collectTarget": "PACKAGE_VALUE"
+        }
+    }
+}
+```
+
+**Mode A response notes**
+
+- `costs.total` = `deliverySubtotal` + `serviceFee` (+ hub commission when applicable).
+- `deliveryFee` describes who pays what before a request is created.
+- `matchingEligible` is `true` when courier matching can start immediately after payment.
+- When `courierSelection` is `SPECIFIC`, a `courier` object may also be included.
+- Auto-promotions are **not** applied on this endpoint.
+
+#### Mode B response — `totalWeight` + `totalValue`
+
 **200 Response**
 
 ```json
@@ -303,32 +540,46 @@ Provide totals directly when you do not have saved packages.
     "data": {
         "distance": { "distanceKm": 12.743, "etaSeconds": 1649 },
         "routeType": "INTER_CITY",
+        "tierIds": {
+            "countryPricingId": "uuid",
+            "statePricingId": "uuid",
+            "cityPricingId": "uuid"
+        },
         "costs": {
-            "base": "1200",
-            "weight": "150",
-            "time": "0",
-            "insurance": "0",
-            "urgency": "200",
-            "fleet": "100",
-            "total": "1650"
+            "base": "1200.00",
+            "fleet": "100.00",
+            "deliverySubtotal": "1550.00",
+            "total": "1700.00",
+            "weight": "150.00",
+            "insurance": "0.00",
+            "surcharge": "100.00",
+            "serviceFee": "150.00"
         },
         "breakdown": {
             "baseCharge": "Base distance charge for 12.74km",
             "weightCharge": "Additional charge for 100kg",
-            "timeCharge": null,
             "insuranceCharge": null,
-            "urgencyCharge": "Urgency charge for PRIORITY delivery",
-            "fleetCharge": "Fleet charge for Bike delivery"
-        }
+            "fleetCharge": "Fleet charge for Bike delivery",
+            "surchargeCharge": "Surcharge for PRIORITY:PRIORITY",
+            "serviceFeeCharge": "Service fee (flat) → 150.00"
+        },
+        "courierPricingRule": null
     }
 }
 ```
 
-**Response notes**
+When a specific courier has a matching pricing rule, `courierPricingRule` is populated and weight/fleet/surcharge may be zeroed:
 
-- `distance` is computed from coordinates after geofencing.
-- `costs` values are decimals and may be returned as strings.
-- If you pass a `fleetTypeId` that is not compatible with the weight, the API prices using the first compatible recommendation.
+```json
+"courierPricingRule": {
+    "id": "uuid",
+    "capBy": "LOCATION",
+    "from": "Lagos",
+    "to": "Ibadan",
+    "withinKmRadius": null,
+    "isPerKg": false
+}
+```
 
 **Common errors**
 
@@ -344,17 +595,29 @@ Create a delivery request (P2P).
 ```json
 {
     "origin": {
-        "address": "Ladipo Kuku Street, Ikeja Lagos",
-        "lat": 6.6018,
-        "lon": 3.3515
+        "country": "Nigeria",
+        "zipCode": "102212",
+        "countryCode": "NG",
+        "lat": 6.617973099999999,
+        "lon": 3.3208916,
+        "googlePlaceId": "ChIJNSzoPHOROxARYADX4-24Io0",
+        "addressLine1": "Agege, Lagos, Nigeria",
+        "addressLine2": "86 Oniwaya Rd, Agege, Lagos 102212, Lagos, Nigeria",
+        "contactName": "Raheem Kawojue",
+        "contactPhone": "+2348131911964",
+        "contactEmail": "kawojue08@gmail.com"
     },
-    "destination": "Adewole Estate, Surulere Lagos",
-    "originContactEmail": "sender@example.com",
-    "originContactPhone": "+2348012345678",
-    "originContactName": "Jane Sender",
-    "destinationContactEmail": "user@example.com",
-    "destinationContactPhone": "+2348012345678",
-    "destinationContactName": "John Doe",
+    "destination": {
+        "country": "Nigeria",
+        "countryCode": "NG",
+        "lat": 6.5244,
+        "lon": 3.3792,
+        "googlePlaceId": "ChIJ6cPolh-QOxAR_rCHmFNKObg",
+        "addressLine1": "Gbagada, Lagos, Nigeria",
+        "contactName": "Jane Recipient",
+        "contactPhone": "+2348098765432",
+        "contactEmail": "jane@example.com"
+    },
     "packagesId": ["uuid-1", "uuid-2"],
     "type": "PICKUP",
     "courierSelection": "ANYONE",
@@ -372,11 +635,13 @@ Create a delivery request (P2P).
 }
 ```
 
+When using the full object from your map picker, contact fields on `origin` / `destination` satisfy contact requirements — top-level `originContact*` / `destinationContact*` fields are optional in that case.
+
 **Body fields**
 
 | Field                        | Type             | Required  | Description                                                                                                                              |
 | ---------------------------- | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `origin`                     | string \| object | Yes       | Pickup address                                                                                                                           |
+| `origin`                     | string \| object | Yes       | Pickup address (see [Origin and destination](#origin-and-destination))                                                                   |
 | `destination`                | string \| object | Yes       | Drop-off address                                                                                                                         |
 | `originContactEmail`         | string           | No        | Defaults to your account email if omitted                                                                                                |
 | `originContactPhone`         | string           | No        | Defaults to your account phone if omitted                                                                                                |
@@ -409,6 +674,8 @@ Create a delivery request (P2P).
 - `SPECIFIC` — assign a courier you already have in the system (`courierId` required)
 - `MERCHANT_SPECIAL_COURIERS` — assign from your merchant-specific courier list (requires couriers added in the merchant dashboard)
 
+#### Response — `paymentMethodType: WALLET` (default)
+
 **201 Response**
 
 ```json
@@ -421,14 +688,12 @@ Create a delivery request (P2P).
         "userId": "uuid",
         "profileId": "uuid",
         "type": "PICKUP",
-        "urgencyType": "PRIORITY",
-        "deliveryDate": "2026-01-24T00:00:00.000Z",
-        "deliverySlot": "04:00 - 14:00",
         "status": "PENDING",
-        "totalWeight": 100,
-        "totalValue": 1000,
+        "totalWeight": "9.00000",
+        "totalValue": "250000.00",
         "createdAt": "2026-01-24T12:34:56.789Z",
         "updatedAt": "2026-01-24T12:34:56.789Z",
+        "deletedAt": null,
         "delivery": {
             "id": "uuid",
             "userId": "uuid",
@@ -438,22 +703,164 @@ Create a delivery request (P2P).
             "routeType": "INTER_CITY",
             "fleetTypeId": "uuid",
             "apiKeyId": "uuid",
-            "distanceKm": "12.743",
+            "distanceKm": 12.743,
             "etaSeconds": 1649,
-            "deliveryFee": "1650",
-            "weightFee": "150",
-            "fleetFee": "100",
-            "urgencyFee": "200",
-            "insuranceFee": "0",
-            "baseOrDistanceFee": "1200",
-            "origin": {},
-            "destination": {},
-            "createdAt": "2026-01-24T12:34:56.789Z",
-            "updatedAt": "2026-01-24T12:34:56.789Z"
-        }
+            "deliveryFee": "1550.00",
+            "deliveryFeeTotal": "1550.00",
+            "serviceFee": "150.00",
+            "weightFee": "150.00",
+            "fleetFee": "100.00",
+            "surchargeFee": "100.00",
+            "insuranceFee": "0.00",
+            "baseOrDistanceFee": "1200.00",
+            "deliveryFeePayer": "CREATOR",
+            "courierMatching": "ANYONE",
+            "origin": {
+                "id": "uuid",
+                "country": "Nigeria",
+                "zipCode": "102212",
+                "countryCode": "NG",
+                "lat": 6.617973099999999,
+                "lon": 3.3208916,
+                "googlePlaceId": "ChIJNSzoPHOROxARYADX4-24Io0",
+                "addressLine1": "Agege, Lagos, Nigeria",
+                "addressLine2": "86 Oniwaya Rd, Agege, Lagos 102212, Lagos, Nigeria",
+                "timezone": "Africa/Lagos",
+                "regionName": "SW",
+                "state": "Lagos",
+                "lgaOrCity": "AGEGE",
+                "region": "SW",
+                "subregion": "Western Africa",
+                "continentCode": "AF",
+                "continentName": "Africa",
+                "countryCodeAlpha3": "NGA",
+                "adminUnitId": "NG-LAGOS-AGEGE",
+                "adminUnitName": "AGEGE",
+                "adminUnitType": "admin2",
+                "adminUnitParentId": "NG-LAGOS",
+                "admin1Id": "NG-LAGOS",
+                "admin1Name": "Lagos",
+                "admin2Id": "NG-LAGOS-AGEGE",
+                "admin2Name": "AGEGE",
+                "admin3Name": "Oniwaya/Papa-Uku",
+                "operationalRegionId": "NG-SW",
+                "h3Index": "8a5882643967fff",
+                "phrase": "domeest.ponticello.sidewall",
+                "resolution": 10,
+                "centerLat": 6.617950538557496,
+                "centerLon": 3.320709488840802,
+                "contactName": "Raheem Kawojue",
+                "contactPhone": "+2348131911964",
+                "contactEmail": "kawojue08@gmail.com",
+                "note": "",
+                "createdAt": "2026-01-24T12:34:56.789Z",
+                "updatedAt": "2026-01-24T12:34:56.789Z"
+            },
+            "destination": {
+                "id": "uuid",
+                "country": "Nigeria",
+                "zipCode": "102212",
+                "countryCode": "NG",
+                "lat": 6.5244,
+                "lon": 3.3792,
+                "googlePlaceId": "ChIJ6cPolh-QOxAR_rCHmFNKObg",
+                "addressLine1": "Gbagada, Lagos, Nigeria",
+                "addressLine2": "Gbagada, Lagos, Nigeria",
+                "timezone": "Africa/Lagos",
+                "regionName": "SW",
+                "state": "Lagos",
+                "lgaOrCity": "GBAGADA",
+                "region": "SW",
+                "subregion": "Western Africa",
+                "continentCode": "AF",
+                "continentName": "Africa",
+                "countryCodeAlpha3": "NGA",
+                "admin1Id": "NG-LAGOS",
+                "admin1Name": "Lagos",
+                "operationalRegionId": "NG-SW",
+                "contactName": "Jane Recipient",
+                "contactPhone": "+2348098765432",
+                "contactEmail": "jane@example.com",
+                "note": "",
+                "createdAt": "2026-01-24T12:34:56.789Z",
+                "updatedAt": "2026-01-24T12:34:56.789Z"
+            }
+        },
+        "deliveryFee": {
+            "payer": "CREATOR",
+            "gross": {
+                "delivery": "1550.00",
+                "serviceFee": "150.00",
+                "hubCommission": "0.00",
+                "bundledTotal": "1700.00"
+            },
+            "creator": {
+                "amount": "1700.00",
+                "paymentRequired": true,
+                "paid": true
+            },
+            "recipient": {
+                "amount": "0.00",
+                "paymentRequired": false,
+                "paid": false,
+                "checkoutUrl": null
+            },
+            "promotion": {
+                "settlementMode": null,
+                "platformFunded": false,
+                "settledAmount": "0.00",
+                "discountAmount": "0.00",
+                "isApplied": false
+            }
+        },
+        "matchingEligible": true
     }
 }
 ```
+
+#### Response — `paymentMethodType: CHECKOUT`
+
+Returns a Paystack checkout payload instead of debiting the wallet immediately:
+
+```json
+{
+    "success": true,
+    "message": "Delivery request created successfully",
+    "data": {
+        "status": true,
+        "message": "Authorization URL created",
+        "data": {
+            "authorization_url": "https://checkout.paystack.com/...",
+            "access_code": "...",
+            "reference": "..."
+        },
+        "deliveryFee": { "...": "..." },
+        "matchingEligible": false
+    }
+}
+```
+
+Courier matching starts after payment succeeds.
+
+#### Response — `payOnDelivery: true`
+
+Adds a `payOnDelivery` block:
+
+```json
+"payOnDelivery": {
+    "enabled": true,
+    "collectAmount": "250000.00",
+    "collectTarget": "PACKAGE_VALUE",
+    "remitTo": "MY_WALLET"
+}
+```
+
+**Response notes**
+
+- `totalWeight` and `totalValue` on the P2P record are **strings** (Decimal).
+- `delivery.distanceKm` is a **number** (float).
+- `delivery.status` is always `REQUEST_CREATED` on create; `status` on the P2P record reflects payment state (`PENDING`, `PENDING_PAYMENT`, etc.).
+- Full `origin` / `destination` use the [resolved address object](#resolved-address-object) plus `id` and timestamps.
 
 **Common errors**
 
@@ -487,7 +894,7 @@ Cancel an eligible delivery request.
 
 - `404` `Delivery request not found`
 - `400` `Delivery request can not be canceled due to its current status`
-- `400` `You can only cancel a delivery request twice every 5 hours`
+- `400` `You can only cancel a delivery request twice every 3 hours`
 
 ### POST /api/package
 
@@ -509,9 +916,8 @@ Use this endpoint to create a new package or update an existing one.
     "name": "Laptop",
     "description": "Package description",
     "quantity": 1,
-    "weight": 1.25,
-    "value": 250000,
-    "note": "Fragile"
+    "size": "SMALL",
+    "value": 250000
 }
 ```
 
@@ -520,22 +926,24 @@ Use this endpoint to create a new package or update an existing one.
 ```json
 {
     "packageId": "uuid",
-    "description": "Updated description",
-    "note": "Handle with care"
+    "description": "Updated description"
 }
 ```
 
 **Fields**
 
-- `packageId` (optional, uuid): include to update an existing package
-- `packageType` (string): required when creating
-- `image` (optional, https URL): must be hosted on `cdn.waysdrop.com`
-- `name` (string): required when creating
-- `description` (optional, string)
-- `quantity` (number, int): required when creating
-- `weight` (number): required when creating (up to 5 decimal places)
-- `value` (number): required when creating
-- `note` (optional, string)
+| Field         | Type   | Required on create | Description                                            |
+| ------------- | ------ | ------------------ | ------------------------------------------------------ |
+| `packageId`   | uuid   | No                 | Include to update an existing package                  |
+| `packageType` | string | Yes                | Category label                                         |
+| `image`       | url    | No                 | Must be hosted on `cdn.waysdrop.com`                   |
+| `name`        | string | Yes                | Package name                                           |
+| `description` | string | No                 | Max 128 chars                                          |
+| `quantity`    | int    | Yes                | Number of items                                        |
+| `size`        | enum   | Yes                | `SMALL` (≈2 kg), `MEDIUM` (≈7 kg), or `LARGE` (≈15 kg) |
+| `value`       | number | Yes                | Total value in NGN                                     |
+
+Weight is derived from `size` on create — you do not send `weight` directly.
 
 **201 Response**
 
@@ -547,16 +955,20 @@ Use this endpoint to create a new package or update an existing one.
         "id": "uuid",
         "userId": "uuid",
         "p2pDeliveryId": null,
+        "errandDeliveryId": null,
+        "errandStoreId": null,
+        "productId": null,
+        "variantCombinationId": null,
         "packageType": "Electronics",
         "name": "Laptop",
         "image": "https://cdn.waysdrop.com/....jpg",
         "description": "Package description",
-        "note": "Fragile",
         "quantity": 1,
-        "weight": "1.25000",
+        "weight": "2.00000",
         "value": "250000.00",
-        "unit": "cm",
+        "size": "SMALL",
         "type": "PACKAGE_ITEM",
+        "selectedOptions": [],
         "createdAt": "2026-01-24T12:34:56.789Z",
         "updatedAt": "2026-01-24T12:34:56.789Z",
         "deletedAt": null
@@ -589,18 +1001,27 @@ Get packages that have not been assigned to a delivery (for the authenticated us
     "data": [
         {
             "id": "uuid",
+            "userId": "uuid",
+            "p2pDeliveryId": null,
             "packageType": "Electronics",
             "name": "Laptop",
+            "image": "https://cdn.waysdrop.com/....jpg",
+            "description": "Package description",
             "quantity": 1,
-            "weight": "1.25000",
+            "weight": "2.00000",
             "value": "250000.00",
-            "p2pDeliveryId": null,
+            "size": "SMALL",
+            "type": "PACKAGE_ITEM",
+            "selectedOptions": [],
             "createdAt": "2026-01-24T12:34:56.789Z",
-            "updatedAt": "2026-01-24T12:34:56.789Z"
+            "updatedAt": "2026-01-24T12:34:56.789Z",
+            "deletedAt": null
         }
     ]
 }
 ```
+
+Returns the full `DeliveryPackage` record for each unassigned package.
 
 ### GET /api/deliveries/:deliveryId
 
@@ -623,6 +1044,27 @@ Get a delivery (for the authenticated user).
         "type": "P2P",
         "status": "IN_TRANSIT",
         "routeType": "INTER_CITY",
+        "distanceKm": 12.743,
+        "etaSeconds": 1649,
+        "deliveryFee": "1550.00",
+        "deliveryFeeTotal": "1550.00",
+        "serviceFee": "150.00",
+        "weightFee": "150.00",
+        "fleetFee": "100.00",
+        "surchargeFee": "100.00",
+        "insuranceFee": "0.00",
+        "baseOrDistanceFee": "1200.00",
+        "deliveryFeePayer": "CREATOR",
+        "courierMatching": "ANYONE",
+        "requireCollectionProofCode": true,
+        "requireDeliveryProofCode": true,
+        "link3rdPartyByContactInfo": true,
+        "urgencyType": "PRIORITY",
+        "deliveryDate": "2026-01-24T00:00:00.000Z",
+        "deliverySlot": "04:00 - 14:00",
+        "fleetTypeId": "uuid",
+        "createdAt": "2026-01-24T12:34:56.789Z",
+        "updatedAt": "2026-01-24T12:40:00.000Z",
         "fleetType": {
             "id": "uuid",
             "name": "Bike",
@@ -630,56 +1072,93 @@ Get a delivery (for the authenticated user).
         },
         "p2pDelivery": {
             "id": "uuid",
-            "status": "PENDING",
+            "deliveryId": "uuid",
+            "userId": "uuid",
             "profileId": "uuid",
-            "urgencyType": "PRIORITY",
-            "deliveryDate": "2026-01-24T00:00:00.000Z",
-            "deliverySlot": "04:00 - 14:00",
-            "totalWeight": 2.5,
-            "totalValue": 12000
+            "type": "PICKUP",
+            "status": "PENDING",
+            "totalWeight": "9.00000",
+            "totalValue": "250000.00",
+            "createdAt": "2026-01-24T12:34:56.789Z",
+            "updatedAt": "2026-01-24T12:34:56.789Z"
         },
         "origin": {
-            "googlePlaceId": "ChIJ.....",
+            "id": "uuid",
             "country": "Nigeria",
+            "zipCode": "102212",
             "countryCode": "NG",
-            "zipCode": null,
-            "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
-            "addressLine2": "Ikeja, Lagos, Nigeria",
+            "lat": 6.617973099999999,
+            "lon": 3.3208916,
+            "googlePlaceId": "ChIJNSzoPHOROxARYADX4-24Io0",
+            "addressLine1": "Agege, Lagos, Nigeria",
+            "addressLine2": "86 Oniwaya Rd, Agege, Lagos 102212, Lagos, Nigeria",
+            "timezone": "Africa/Lagos",
+            "regionName": "SW",
             "state": "Lagos",
-            "lgaOrCity": "Ikeja",
+            "lgaOrCity": "AGEGE",
             "region": "SW",
-            "regionName": "South West",
-            "regionalZone": "South West",
-            "zoneOrDistrict": "Ikeja",
-            "loc": { "lat": 6.6018, "lon": 3.3515 },
-            "contactName": "John Doe",
-            "contactPhone": "+2348012345678",
-            "contactEmail": "johndoe@example.com"
+            "subregion": "Western Africa",
+            "continentCode": "AF",
+            "continentName": "Africa",
+            "countryCodeAlpha3": "NGA",
+            "adminUnitId": "NG-LAGOS-AGEGE",
+            "adminUnitName": "AGEGE",
+            "adminUnitType": "admin2",
+            "adminUnitParentId": "NG-LAGOS",
+            "admin1Id": "NG-LAGOS",
+            "admin1Name": "Lagos",
+            "admin2Id": "NG-LAGOS-AGEGE",
+            "admin2Name": "AGEGE",
+            "admin3Name": "Oniwaya/Papa-Uku",
+            "operationalRegionId": "NG-SW",
+            "h3Index": "8a5882643967fff",
+            "phrase": "domeest.ponticello.sidewall",
+            "resolution": 10,
+            "centerLat": 6.617950538557496,
+            "centerLon": 3.320709488840802,
+            "contactName": "Raheem Kawojue",
+            "contactPhone": "+2348131911964",
+            "contactEmail": "kawojue08@gmail.com",
+            "note": "",
+            "createdAt": "2026-01-24T12:34:56.789Z",
+            "updatedAt": "2026-01-24T12:34:56.789Z"
         },
         "destination": {
-            "googlePlaceId": "ChIJ.....",
+            "id": "uuid",
             "country": "Nigeria",
+            "zipCode": "102212",
             "countryCode": "NG",
-            "zipCode": null,
-            "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
-            "addressLine2": "Ikeja, Lagos, Nigeria",
+            "lat": 6.5244,
+            "lon": 3.3792,
+            "googlePlaceId": "ChIJ6cPolh-QOxAR_rCHmFNKObg",
+            "addressLine1": "Gbagada, Lagos, Nigeria",
+            "addressLine2": "Gbagada, Lagos, Nigeria",
+            "timezone": "Africa/Lagos",
+            "regionName": "SW",
             "state": "Lagos",
-            "lgaOrCity": "Ikeja",
+            "lgaOrCity": "GBAGADA",
             "region": "SW",
-            "regionName": "South West",
-            "regionalZone": "South West",
-            "zoneOrDistrict": "Ikeja",
-            "loc": { "lat": 6.6018, "lon": 3.3515 },
-            "contactName": "John Doe",
-            "contactPhone": "+2348012345678",
-            "contactEmail": "johndoe@example.com"
+            "subregion": "Western Africa",
+            "continentCode": "AF",
+            "continentName": "Africa",
+            "countryCodeAlpha3": "NGA",
+            "admin1Id": "NG-LAGOS",
+            "admin1Name": "Lagos",
+            "operationalRegionId": "NG-SW",
+            "contactName": "Jane Recipient",
+            "contactPhone": "+2348098765432",
+            "contactEmail": "jane@example.com",
+            "note": "",
+            "createdAt": "2026-01-24T12:34:56.789Z",
+            "updatedAt": "2026-01-24T12:34:56.789Z"
         },
         "proofs": [
             {
                 "id": "uuid",
                 "type": "COLLECTION",
-                "code": "1234",
+                "code": null,
                 "isActive": false,
+                "scannedAt": null,
                 "createdAt": "2026-01-24T12:34:56.789Z"
             }
         ],
@@ -705,7 +1184,8 @@ Get a delivery (for the authenticated user).
                 "country": "Nigeria",
                 "state": "Lagos",
                 "lgaOrCity": "Ikeja",
-                "loc": { "lat": 6.6018, "lon": 3.3515 }
+                "lat": 6.6018,
+                "lon": 3.3515
             },
             "eta": {
                 "from": "2026-01-24T12:50:00.000Z",
@@ -725,6 +1205,10 @@ Get a delivery (for the authenticated user).
 
 **Response notes**
 
-- `courier` is `null` until the delivery is assigned. When present, it contains an ETA window computed from live location.
-- `deliverySteps` are filtered to visible steps only (hidden steps are not returned).
-- Proof `code` is only returned after the proof has been scanned.
+- The delivery object includes all scalar `Delivery` fields — the example shows the most useful ones.
+- `origin` and `destination` use the full [resolved address object](#resolved-address-object) with `id` and timestamps.
+- `courier` is **omitted** (not `null`) until a courier is assigned.
+- `currentLocation` uses flat `lat` / `lon`, not a nested `loc` object.
+- Proof `code` is `null` until the proof has been scanned (`scannedAt` is set).
+- `deliverySteps` only includes visible steps (`hidden` steps are excluded).
+- `p2pDelivery.totalWeight` and `totalValue` are **strings** (Decimal).
