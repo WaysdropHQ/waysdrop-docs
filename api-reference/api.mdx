@@ -1,1214 +1,1249 @@
+---
+title: "API module"
+description: "Partner API — packages, pricing, deliveries, wallet, and FX"
+---
+
 # API module
 
-Base URLs:
+Base path: **`/api`** (no global API prefix). Hosts: staging **`https://staging-api.waysdrop.com`**, live **`https://api.waysdrop.com`**.
 
-- Live: `https://api.waysdrop.com`
-- Staging: `https://staging-api.waysdrop.com`
+All routes use **`ApiKeyAuthGuard`** — **API key only** (JWT is not accepted on this controller).
 
-Base path: `/api`
+Controller: `src/api/api.controller.ts` · Service: `src/api/api.service.ts`
 
-This module is intended for third‑party integrations. All endpoints require the `api-key` header.
+---
 
-```bash
-curl -X GET "https://api.waysdrop.com/api/countries?search=nigeria" \
-  -H "api-key: wsp_live_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-```
+## Authentication
 
-## Response shapes
+| Header    | Value                                         |
+| --------- | --------------------------------------------- |
+| `api-key` | `wsp_live_<64 hex>` or `wsp_staging_<64 hex>` |
 
-### Success
+The key must match: `^wsp_(live|staging)_[a-f0-9]{64}$`
 
-```json
-{
-    "success": true,
-    "message": "<human-readable message>",
-    "data": {}
-}
-```
-
-### No content
-
-Some endpoints return `204 No Content` with an empty body.
+The authenticated user is the **API key owner**. Quota and billing are enforced per key.
 
 ### Errors
 
-Errors are returned using the global error envelope described in [Errors](../get-started/errors).
+| Status | When                                                  |
+| ------ | ----------------------------------------------------- |
+| `401`  | Missing key, invalid format, or validation failed     |
+| `403`  | Key disabled / IP or origin restrictions              |
+| `429`  | Quota exceeded (`message` may include `quota` object) |
 
-### Conventions
+### Account requirements (delivery flows)
 
-- **Decimals** — Prisma `Decimal` fields serialize as **strings** in JSON (e.g. `"1650.00"`, `"2.00000"`).
-- **Coordinates** — Resolved locations use flat `lat` / `lon` numbers, not a nested `loc` object.
-- **Optional fields** — Geo/admin fields on resolved addresses vary by what was geocoded; omitted keys are not returned.
+| Requirement                                                            | Used by                                      |
+| ---------------------------------------------------------------------- | -------------------------------------------- |
+| **Personal profile** on the key owner                                  | `POST /api/request` (author profile for P2P) |
+| **Merchant wallet** (`WalletChannel.MERCHANT`) with sufficient balance | `POST /api/request` (wallet debit)           |
+| Packages owned by the key owner, not yet assigned to a delivery        | `POST /api/request`, package endpoints       |
 
-## Origin and destination
+---
 
-Endpoints that accept `origin` and `destination` (`POST /api/route`, `POST /api/pricing`, `POST /api/request`) use the same address model. You can send a **plain string**, a **minimal geocode object**, or a **full resolved object** from your map picker.
+## Response envelopes
 
-### Request input
-
-**Legacy string** — geocoded server-side:
-
-```json
-"origin": "Agege, Lagos, Nigeria"
-```
-
-**Minimal object** — preferred when you have coordinates or a place ID:
-
-```json
-"origin": {
-    "address": "Agege, Lagos, Nigeria",
-    "lat": 6.617973099999999,
-    "lon": 3.3208916,
-    "googlePlaceId": "ChIJNSzoPHOROxARYADX4-24Io0"
-}
-```
-
-**Full object** — pass the resolved shape from your map picker or a prior `/api/route` response. Extra geo/admin fields are preserved; geocoding uses `address` (or `addressLine1`), `lat`/`lon`, and `googlePlaceId`.
-
-| Input field      | Type              | Description                                                                 |
-| ---------------- | ----------------- | --------------------------------------------------------------------------- |
-| `address`        | string (optional) | Free-text address for geocoding. Alias for `addressLine1` when pre-resolved |
-| `lat` / `lon`    | number (optional) | Coordinates from map picker — preferred over string geocoding               |
-| `googlePlaceId`  | string (optional) | Google Place ID from map picker                                             |
-| `floor`          | string (optional) | Floor or unit                                                               |
-| `contactName`    | string (optional) | Contact at this stop                                                        |
-| `contactPhone`   | string (optional) | E.164 phone at this stop                                                    |
-| `contactEmail`   | string (optional) | Email at this stop                                                          |
-| `additionalNote` | string (optional) | Note for this stop (stored as `note`)                                       |
-| `id`             | uuid (optional)   | Saved address ID — skips geocoding when valid                               |
-
-On `POST /api/request`, origin contact fields can also be set at the top level (`originContactName`, `originContactPhone`, `originContactEmail`). Top-level destination contact fields are **required** unless already present on the `destination` object.
-
-### Resolved address object
-
-After geocoding (in `/api/route` responses, delivery records, etc.), `origin` and `destination` resolve to this shape. All fields except `country` are optional — presence depends on the geocode result.
+### Success (JSON body)
 
 ```json
 {
-    "country": "Nigeria",
-    "zipCode": "102212",
-    "countryCode": "NG",
-    "lat": 6.617973099999999,
-    "lon": 3.3208916,
-    "googlePlaceId": "ChIJNSzoPHOROxARYADX4-24Io0",
-    "addressLine1": "Agege, Lagos, Nigeria",
-    "addressLine2": "86 Oniwaya Rd, Agege, Lagos 102212, Lagos, Nigeria",
-    "timezone": "Africa/Lagos",
-    "regionName": "SW",
-    "state": "Lagos",
-    "lgaOrCity": "AGEGE",
-    "region": "SW",
-    "subregion": "Western Africa",
-    "continentCode": "AF",
-    "continentName": "Africa",
-    "countryCodeAlpha3": "NGA",
-    "adminUnitId": "NG-LAGOS-AGEGE",
-    "adminUnitName": "AGEGE",
-    "adminUnitType": "admin2",
-    "adminUnitParentId": "NG-LAGOS",
-    "admin1Id": "NG-LAGOS",
-    "admin1Name": "Lagos",
-    "admin2Id": "NG-LAGOS-AGEGE",
-    "admin2Name": "AGEGE",
-    "admin3Name": "Oniwaya/Papa-Uku",
-    "operationalRegionId": "NG-SW",
-    "h3Index": "8a5882643967fff",
-    "phrase": "domeest.ponticello.sidewall",
-    "resolution": 10,
-    "centerLat": 6.617950538557496,
-    "centerLon": 3.320709488840802,
-    "contactName": "Raheem Kawojue",
-    "contactPhone": "+2348131911964",
-    "contactEmail": "kawojue08@gmail.com",
-    "note": ""
+  "success": true,
+  "message": "<human-readable message>",
+  "data": <payload>
 }
 ```
 
-**Field groups**
+### Success (no body)
 
-| Group                | Fields                                                                                                                                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Display**          | `addressLine1`, `addressLine2`, `floor`, `label`                                                                                                                          |
-| **Coordinates**      | `lat`, `lon`, `centerLat`, `centerLon`, `swLat`, `swLon`, `neLat`, `neLon`                                                                                                |
-| **Country / region** | `country`, `countryCode`, `countryCodeAlpha3`, `state`, `lgaOrCity`, `zoneOrDistrict`, `region`, `regionName`, `regionalZone`, `subregion`, `zipCode`, `timezone`         |
-| **Continent**        | `continentCode`, `continentName`                                                                                                                                          |
-| **Admin hierarchy**  | `adminUnitId`, `adminUnitName`, `adminUnitType`, `adminUnitParentId`, `admin1Id`, `admin1Name`, `admin2Id`, `admin2Name`, `admin3Id`, `admin3Name`, `operationalRegionId` |
-| **Place reference**  | `googlePlaceId`                                                                                                                                                           |
-| **H3 grid**          | `h3Index`, `phrase`, `resolution`                                                                                                                                         |
-| **Contact**          | `contactName`, `contactPhone`, `contactEmail`, `note`                                                                                                                     |
-| **Persisted only**   | `id`, `createdAt`, `updatedAt`, `deletedAt` — present on stored delivery addresses                                                                                        |
+**`204 No Content`** — empty body (`DELETE /api/package/:packageId`).
 
-Persisted addresses on deliveries (`GET /api/deliveries/:deliveryId`, `POST /api/request` → `delivery.origin` / `delivery.destination`) include `id` and timestamps in addition to the fields above.
-
-## Endpoints
-
-### GET /api/countries
-
-Fetch available countries for routing and pricing.
-
-**Query**
-
-- `search` (optional, string)
-
-**200 Response**
+### Errors
 
 ```json
 {
-    "success": true,
-    "message": "Countries fetched successfully",
-    "data": [
-        {
-            "value": "NG",
-            "name": "Nigeria",
-            "type": "INTER_COUNTRY",
-            "country": "Nigeria",
-            "countryCode": "NG",
-            "countryCodeAlpha3": "NGA",
-            "continentCode": "AF",
-            "continentName": "Africa",
-            "lat": 9.082,
-            "lon": 8.6753
-        }
-    ]
+  "statusCode": 400,
+  "method": "POST",
+  "timestamp": "2026-05-15T12:00:00.000Z",
+  "path": "/api/request",
+  "url": "https://api.example.com/api/request",
+  "message": "Insufficient balance",
+  "details": { "error": "Unprocessable Entity", "statusCode": 422 },
+  "environment": "production"
 }
 ```
 
-**Response fields**
+Validation errors: `message` is a single string with fields joined by `; `.
 
-| Field                             | Description                                   |
-| --------------------------------- | --------------------------------------------- |
-| `value`                           | ISO country code (e.g. `"NG"`)                |
-| `name`                            | Country display name                          |
-| `type`                            | Always `"INTER_COUNTRY"`                      |
-| `country` / `countryCode`         | Country name and ISO code                     |
-| `countryCodeAlpha3`               | ISO 3166-1 alpha-3 code                       |
-| `continentCode` / `continentName` | Continent metadata                            |
-| `lat` / `lon`                     | Country centroid coordinates (when available) |
+---
 
-Without `search`, returns up to 50 results.
+## Money overrides (optional)
 
-### GET /api/states
+Several endpoints accept optional currency overrides aligned with consumer APIs:
 
-Fetch available states.
+| Param           | Location     | Purpose                                                                                                                                                                                                          |
+| --------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inputCurrency` | Request body | ISO 4217 currency of numeric **input** fields (`value`, `totalValue`, …). When omitted, the key owner's corridor default applies. Persisted rows store USD catalog `value`/`totalValue` plus FX snapshot fields. |
+| `currency`      | Query string | ISO 4217 **display-only** override for `*Display` fields on responses. Does not change stored ledger/catalog amounts.                                                                                            |
 
-**Query**
+Example — declare package value in GHS but render list prices in NGN:
 
-- `search` (optional, string)
+```http
+POST /api/package?currency=NGN
+Content-Type: application/json
 
-**200 Response**
-
-```json
 {
-    "success": true,
-    "message": "States fetched successfully",
-    "data": [
-        {
-            "value": "ng-admin1-lagos",
-            "name": "Lagos",
-            "type": "INTER_STATE",
-            "state": "Lagos",
-            "country": "Nigeria",
-            "countryCode": "NG",
-            "continentCode": "AF",
-            "continentName": "Africa",
-            "regionalZone": "South West",
-            "admin1Id": "ng-admin1-lagos",
-            "admin1Name": "Lagos",
-            "lat": 6.5244,
-            "lon": 3.3792
-        }
-    ]
+  "name": "Parcel",
+  "quantity": 1,
+  "value": 500,
+  "inputCurrency": "GHS",
+  "size": "SMALL"
 }
 ```
 
-**Response fields**
+Response `data.value` remains USD catalog; `data.valueDisplay.local.currency` follows `?currency=`.
 
-| Field                     | Description                   |
-| ------------------------- | ----------------------------- |
-| `value`                   | State route identifier        |
-| `name`                    | State display name            |
-| `type`                    | Always `"INTER_STATE"`        |
-| `state`                   | State name                    |
-| `regionalZone`            | Broad regional grouping       |
-| `admin1Id` / `admin1Name` | Admin-1 hierarchy identifiers |
+See [Money & currencies](/get-started/money-and-currencies).
 
-### GET /api/cities
+---
 
-Fetch available cities.
+## Money model (catalog vs wallet)
 
-**Query**
+Waysdrop uses **two money layers**. Do not treat wallet balance as USD.
 
-- `search` (optional, string)
+| Layer                | What it covers                                                                  | Stored as                                                  | API examples                                                             |
+| -------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **Catalog / ledger** | Package `value`, pricing `costs.*`, delivery `totalValue`, transaction `amount` | **USD** (plus FX snapshot fields when the row was written) | `"value": "3.33"`, `"costs": { "total": "4.75" }`                        |
+| **Native wallet**    | `Wallet.balance`, wallet debits/credits, checkout `charge_amount`               | **Wallet `currencyCode`** (e.g. NGN, GHS)                  | Merchant wallet ₦172,500; checkout charges customer in corridor currency |
 
-**200 Response**
+**Writes:** send human amounts with optional `inputCurrency` — the server persists USD catalog + snapshot.
+
+**Reads:** raw numeric fields stay USD catalog; pass `?currency=NGN` (or body `currency` on POST) for optional `*Display` local formatting. Display overrides do **not** change checkout processor or wallet debit currency.
+
+**Checkout (`paymentMethodType: "CHECKOUT"`):** processor and `charge_currency` are chosen from the **collection corridor** (merchant phone → delivery destination → merchant country), not from `?currency=`. Response includes `processor` (`PAYSTACK` \| `NOMBA` \| `STRIPE`), `charge_currency`, `charge_amount`, and `authorization_url` / `checkout_url`.
+
+**Wallet (`paymentMethodType: "WALLET"`):** debits your **merchant wallet** in its native currency; USD catalog amount is converted at debit time when needed.
+
+See [Money & currencies](/get-started/money-and-currencies).
+
+---
+
+## Endpoints overview
+
+| #   | Method   | Path                              | Purpose                                         |
+| --- | -------- | --------------------------------- | ----------------------------------------------- |
+| 1   | `GET`    | `/api/countries`                  | Country location catalog                        |
+| 2   | `GET`    | `/api/states`                     | State location catalog                          |
+| 3   | `GET`    | `/api/cities`                     | City/LGA location catalog                       |
+| 4   | `POST`   | `/api/route`                      | Resolve route distance & type                   |
+| 5   | `GET`    | `/api/fleet-types`                | List active fleet types                         |
+| 6   | `POST`   | `/api/pricing`                    | Estimate delivery cost                          |
+| 7   | `POST`   | `/api/package`                    | Create or edit a package                        |
+| 8   | `DELETE` | `/api/package/:packageId`         | Delete an unassigned package                    |
+| 9   | `GET`    | `/api/packages`                   | List unassigned packages                        |
+| 10  | `POST`   | `/api/request`                    | Create P2P delivery (wallet or hosted checkout) |
+| 11  | `POST`   | `/api/request/:deliveryId/cancel` | Cancel eligible delivery                        |
+| 12  | `GET`    | `/api/deliveries`                 | List deliveries for the current API key         |
+| 13  | `GET`    | `/api/deliveries/:deliveryId`     | Get delivery details & tracking                 |
+| 14  | `GET`    | `/api/wallet`                     | Merchant wallet balance (native currency)       |
+| 15  | `GET`    | `/api/account`                    | Corridor currency & store profile summary       |
+| 16  | `GET`    | `/api/exchange-rate`              | FX rate between two ISO 4217 codes              |
+| 17  | `GET`    | `/api/convert`                    | Convert amount between two currencies           |
+
+---
+
+## 1. Fetch countries
+
+**`GET /api/countries`**
+
+### Query params
+
+| Param    | Type   | Required | Description                   |
+| -------- | ------ | -------- | ----------------------------- |
+| `search` | string | No       | Filter catalog by search text |
+
+### Success — `200 OK`
+
+`data` is an array of **route location options** (`RouteType.INTER_COUNTRY`): each item includes `value`, `name`, `type`, `country`, `countryCode`, `continentCode`, etc.
+
+### Sample
 
 ```json
 {
-    "success": true,
-    "message": "Cities fetched successfully",
-    "data": [
-        {
-            "value": "ChIJ.....",
-            "locationId": "ng-lagos-ikeja",
-            "googlePlaceId": "ChIJ.....",
-            "country": "Nigeria",
-            "countryCode": "NG",
-            "countryCodeAlpha3": "NGA",
-            "lat": 6.6018,
-            "lon": 3.3515,
-            "lgaOrCity": "Ikeja",
-            "state": "Lagos",
-            "zoneOrDistrict": "Ikeja",
-            "region": "SW",
-            "regionName": "South West",
-            "regionalZone": "South West",
-            "adminUnitName": "Ikeja"
-        }
-    ]
+  "success": true,
+  "message": "Countries fetched successfully",
+  "data": [
+    {
+      "value": "NG",
+      "name": "Nigeria",
+      "type": "INTER_COUNTRY",
+      "country": "Nigeria",
+      "countryCode": "NG",
+      "countryCodeAlpha3": "NGA",
+      "continentCode": "AF",
+      "continentName": "Africa"
+    }
+  ]
 }
 ```
 
-**Response notes**
+---
 
-- `value` is `googlePlaceId` when available, otherwise `locationId`.
-- `lat` / `lon` are the coordinates used for distance and ETA calculations.
-- Without `search`, returns up to 50 results.
+## 2. Fetch states
 
-### POST /api/route
+**`GET /api/states`**
 
-Get route data between two addresses.
+### Query params
 
-**Body**
+| Param    | Type   | Required | Description    |
+| -------- | ------ | -------- | -------------- |
+| `search` | string | No       | Filter catalog |
+
+### Success — `200 OK`
+
+`data` is an array of **`INTER_STATE`** options (`value`, `name`, `state`, `country`, `countryCode`, …).
+
+### Sample
 
 ```json
 {
-    "origin": {
-        "address": "Ladipo Kuku Street, Ikeja Lagos",
-        "lat": 6.6018,
-        "lon": 3.3515
+  "success": true,
+  "message": "States fetched successfully",
+  "data": [
+    {
+      "value": "ng-admin1-lagos",
+      "name": "Lagos",
+      "type": "INTER_STATE",
+      "state": "Lagos",
+      "country": "Nigeria",
+      "countryCode": "NG",
+      "admin1Id": "ng-admin1-lagos",
+      "admin1Name": "Lagos"
+    }
+  ]
+}
+```
+
+---
+
+## 3. Fetch cities
+
+**`GET /api/cities`**
+
+### Query params
+
+| Param    | Type   | Required | Description                       |
+| -------- | ------ | -------- | --------------------------------- |
+| `search` | string | No       | Filter indexed city/LGA locations |
+
+### Success — `200 OK`
+
+`data` is an array of **system locations** with a `value` field (`googlePlaceId` or `locationId`), plus `country`, `countryCode`, `lat`, `lon`, `lgaOrCity`, `state`, etc.
+
+### Sample
+
+```json
+{
+  "success": true,
+  "message": "Cities fetched successfully",
+  "data": [
+    {
+      "locationId": "ng-lagos-ikeja",
+      "value": "ChIJxxxxxxxx",
+      "country": "Nigeria",
+      "countryCode": "NG",
+      "lat": 6.6018,
+      "lon": 3.3515,
+      "lgaOrCity": "Ikeja",
+      "state": "Lagos",
+      "adminUnitName": "Ikeja"
+    }
+  ]
+}
+```
+
+---
+
+## 4. Get route data
+
+**`POST /api/route`**
+
+Resolves geocoded origin/destination, driving distance, ETA, and route type.
+
+### Request body
+
+| Field         | Type   | Required | Description                       |
+| ------------- | ------ | -------- | --------------------------------- |
+| `origin`      | string | Yes      | Free-text address (max 255 chars) |
+| `destination` | string | Yes      | Free-text address (max 255 chars) |
+
+```json
+{
+  "origin": "Ladipo Kuku Street, Ikeja Lagos",
+  "destination": "Adewole Estate, Surulere Lagos"
+}
+```
+
+### Success — `200 OK`
+
+| Field                 | Type        | Description                           |
+| --------------------- | ----------- | ------------------------------------- |
+| `distance.distanceKm` | number      | Road/line max distance (km)           |
+| `distance.etaSeconds` | number      | Estimated time (seconds)              |
+| `routeType`           | `RouteType` | e.g. `INTER_CITY`, `INTER_STATE`      |
+| `origin`              | object      | Resolved `GLocation` / address fields |
+| `destination`         | object      | Resolved `GLocation` / address fields |
+
+### Sample
+
+```json
+{
+  "success": true,
+  "message": "Route data fetched successfully",
+  "data": {
+    "distance": {
+      "distanceKm": 18.4,
+      "etaSeconds": 2400
     },
-    "destination": "Adewole Estate, Surulere Lagos"
-}
-```
-
-**200 Response**
-
-```json
-{
-    "success": true,
-    "message": "Route data fetched successfully",
-    "data": {
-        "distance": { "distanceKm": 12.743, "etaSeconds": 1649 },
-        "routeType": "INTER_CITY",
-        "origin": {
-            "country": "Nigeria",
-            "zipCode": "102212",
-            "countryCode": "NG",
-            "lat": 6.617973099999999,
-            "lon": 3.3208916,
-            "googlePlaceId": "ChIJNSzoPHOROxARYADX4-24Io0",
-            "addressLine1": "Agege, Lagos, Nigeria",
-            "addressLine2": "86 Oniwaya Rd, Agege, Lagos 102212, Lagos, Nigeria",
-            "timezone": "Africa/Lagos",
-            "regionName": "SW",
-            "state": "Lagos",
-            "lgaOrCity": "AGEGE",
-            "region": "SW",
-            "subregion": "Western Africa",
-            "continentCode": "AF",
-            "continentName": "Africa",
-            "countryCodeAlpha3": "NGA",
-            "adminUnitId": "NG-LAGOS-AGEGE",
-            "adminUnitName": "AGEGE",
-            "adminUnitType": "admin2",
-            "adminUnitParentId": "NG-LAGOS",
-            "admin1Id": "NG-LAGOS",
-            "admin1Name": "Lagos",
-            "admin2Id": "NG-LAGOS-AGEGE",
-            "admin2Name": "AGEGE",
-            "admin3Name": "Oniwaya/Papa-Uku",
-            "operationalRegionId": "NG-SW",
-            "h3Index": "8a5882643967fff",
-            "phrase": "domeest.ponticello.sidewall",
-            "resolution": 10,
-            "centerLat": 6.617950538557496,
-            "centerLon": 3.320709488840802
-        },
-        "destination": {
-            "country": "Nigeria",
-            "zipCode": "102212",
-            "countryCode": "NG",
-            "lat": 6.5244,
-            "lon": 3.3792,
-            "googlePlaceId": "ChIJ6cPolh-QOxAR_rCHmFNKObg",
-            "addressLine1": "Gbagada, Lagos, Nigeria",
-            "addressLine2": "Gbagada, Lagos, Nigeria",
-            "timezone": "Africa/Lagos",
-            "regionName": "SW",
-            "state": "Lagos",
-            "lgaOrCity": "GBAGADA",
-            "region": "SW",
-            "subregion": "Western Africa",
-            "continentCode": "AF",
-            "continentName": "Africa",
-            "countryCodeAlpha3": "NGA",
-            "admin1Id": "NG-LAGOS",
-            "admin1Name": "Lagos",
-            "operationalRegionId": "NG-SW"
-        }
-    }
-}
-```
-
-**Response notes**
-
-- `origin` and `destination` use the [resolved address object](#resolved-address-object) shape. Contact fields are not included unless you sent them on input.
-- `routeType` is one of `INTER_CITY`, `INTER_STATE`, `INTER_REGION`, `INTER_COUNTRY`, or `INTER_CONTINENT`.
-- `distance.distanceKm` and `distance.etaSeconds` use the max of line and road distance for safety.
-
-### GET /api/fleet-types
-
-Fetch available fleet types.
-
-**200 Response**
-
-```json
-{
-    "success": true,
-    "message": "Fleet types fetched successfully",
-    "data": [
-        {
-            "id": "uuid",
-            "name": "Bike",
-            "icon": "https://cdn.waysdrop.com/fleets/bike.png",
-            "description": "Small packages"
-        }
-    ]
-}
-```
-
-Only active fleet types are returned. `icon` and `description` may be `null`.
-
-### POST /api/pricing
-
-Get pricing for a delivery request. Two pricing modes are supported — use one or the other.
-
-**Mode A — by package IDs (preferred)**
-
-Resolves weight and value from your saved packages. Matches the pricing logic used by `POST /api/request`. Requires an authenticated user (API key owner).
-
-```json
-{
-    "origin": "Ladipo Kuku Street, Ikeja Lagos",
-    "destination": "Adewole Estate, Surulere Lagos",
-    "packagesId": ["uuid-1", "uuid-2"],
-    "urgencyType": "PRIORITY",
-    "fleetTypeId": "uuid",
-    "courierSelection": "ANYONE",
-    "deliveryFeePayer": "CREATOR"
-}
-```
-
-**Mode B — by weight and value**
-
-Provide totals directly when you do not have saved packages.
-
-```json
-{
-    "origin": "Ladipo Kuku Street, Ikeja Lagos",
-    "destination": "Adewole Estate, Surulere Lagos",
-    "totalWeight": 100,
-    "totalValue": 1000,
-    "urgencyType": "PRIORITY",
-    "fleetTypeId": "uuid",
-    "courierSelection": "ANYONE"
-}
-```
-
-**Body fields**
-
-| Field              | Type             | Required  | Description                                                                         |
-| ------------------ | ---------------- | --------- | ----------------------------------------------------------------------------------- |
-| `origin`           | string \| object | Yes       | Pickup address (see [Origin and destination](#origin-and-destination))              |
-| `destination`      | string \| object | Yes       | Drop-off address                                                                    |
-| `packagesId`       | string[]         | Mode A    | Package UUIDs — preferred; resolves weight/value automatically                      |
-| `totalWeight`      | number           | Mode B    | Total weight in kg. Required when `packagesId` is omitted                           |
-| `totalValue`       | number           | Mode B    | Total value in NGN. Required when `packagesId` is omitted                           |
-| `urgencyType`      | enum             | No        | `PRIORITY`, `STANDARD`, or `SCHEDULED`                                              |
-| `deliveryDate`     | string           | SCHEDULED | Date in `YYYY-MM-DD` format                                                         |
-| `deliverySlot`     | string           | SCHEDULED | Time window, e.g. `04:00 - 14:00`                                                   |
-| `slot`             | string           | SCHEDULED | Alias for `deliverySlot`                                                            |
-| `fleetTypeId`      | uuid             | No        | Fleet type override. If incompatible with weight, the first compatible type is used |
-| `courierSelection` | enum             | No        | `ANYONE` (default) or `SPECIFIC`                                                    |
-| `courierId`        | uuid             | SPECIFIC  | Courier profile ID when `courierSelection` is `SPECIFIC`                            |
-| `courierProfileId` | uuid             | No        | Alias for `courierId`                                                               |
-| `deliveryFeePayer` | enum             | No        | `CREATOR` (default), `RECIPIENT`, or `SPLIT`. Who pays the delivery fee             |
-
-#### Mode A response — `packagesId`
-
-**200 Response**
-
-```json
-{
-    "success": true,
-    "message": "Pricing fetched successfully",
-    "data": {
-        "deliveryCost": {
-            "distance": { "distanceKm": 12.743, "etaSeconds": 1649 },
-            "routeType": "INTER_CITY",
-            "tierIds": {
-                "countryPricingId": "uuid",
-                "statePricingId": "uuid",
-                "cityPricingId": "uuid"
-            },
-            "costs": {
-                "base": "1200.00",
-                "fleet": "100.00",
-                "deliverySubtotal": "1550.00",
-                "total": "1700.00",
-                "weight": "150.00",
-                "insurance": "0.00",
-                "surcharge": "100.00",
-                "serviceFee": "150.00"
-            },
-            "breakdown": {
-                "baseCharge": "Base distance charge for 12.74km",
-                "weightCharge": "Additional charge for 9kg",
-                "insuranceCharge": null,
-                "fleetCharge": "Fleet charge for Bike delivery",
-                "surchargeCharge": "Surcharge for PRIORITY:PRIORITY",
-                "serviceFeeCharge": "Service fee (flat) → 150.00"
-            },
-            "courierPricingRule": null,
-            "totalWeight": 9,
-            "totalValue": 250000
-        },
-        "promotion": null,
-        "deliveryFee": {
-            "payer": "CREATOR",
-            "gross": {
-                "delivery": "1550.00",
-                "serviceFee": "150.00",
-                "hubCommission": "0.00",
-                "bundledTotal": "1700.00"
-            },
-            "creator": {
-                "amount": "1700.00",
-                "paymentRequired": true,
-                "paid": false
-            },
-            "recipient": {
-                "amount": "0.00",
-                "paymentRequired": false,
-                "paid": false,
-                "checkoutUrl": null
-            },
-            "promotion": {
-                "settlementMode": null,
-                "platformFunded": false,
-                "settledAmount": "0.00",
-                "discountAmount": "0.00",
-                "isApplied": false
-            }
-        },
-        "matchingEligible": true,
-        "payOnDelivery": {
-            "enabled": false,
-            "collectAmount": "250000.00",
-            "collectTarget": "PACKAGE_VALUE"
-        }
-    }
-}
-```
-
-**Mode A response notes**
-
-- `costs.total` = `deliverySubtotal` + `serviceFee` (+ hub commission when applicable).
-- `deliveryFee` describes who pays what before a request is created.
-- `matchingEligible` is `true` when courier matching can start immediately after payment.
-- When `courierSelection` is `SPECIFIC`, a `courier` object may also be included.
-- Auto-promotions are **not** applied on this endpoint.
-
-#### Mode B response — `totalWeight` + `totalValue`
-
-**200 Response**
-
-```json
-{
-    "success": true,
-    "message": "Pricing fetched successfully",
-    "data": {
-        "distance": { "distanceKm": 12.743, "etaSeconds": 1649 },
-        "routeType": "INTER_CITY",
-        "tierIds": {
-            "countryPricingId": "uuid",
-            "statePricingId": "uuid",
-            "cityPricingId": "uuid"
-        },
-        "costs": {
-            "base": "1200.00",
-            "fleet": "100.00",
-            "deliverySubtotal": "1550.00",
-            "total": "1700.00",
-            "weight": "150.00",
-            "insurance": "0.00",
-            "surcharge": "100.00",
-            "serviceFee": "150.00"
-        },
-        "breakdown": {
-            "baseCharge": "Base distance charge for 12.74km",
-            "weightCharge": "Additional charge for 100kg",
-            "insuranceCharge": null,
-            "fleetCharge": "Fleet charge for Bike delivery",
-            "surchargeCharge": "Surcharge for PRIORITY:PRIORITY",
-            "serviceFeeCharge": "Service fee (flat) → 150.00"
-        },
-        "courierPricingRule": null
-    }
-}
-```
-
-When a specific courier has a matching pricing rule, `courierPricingRule` is populated and weight/fleet/surcharge may be zeroed:
-
-```json
-"courierPricingRule": {
-    "id": "uuid",
-    "capBy": "LOCATION",
-    "from": "Lagos",
-    "to": "Ibadan",
-    "withinKmRadius": null,
-    "isPerKg": false
-}
-```
-
-**Common errors**
-
-- `400` `Provide packagesId or both totalWeight and totalValue`
-- `400` `Authenticated user is required when pricing by packagesId`
-
-### POST /api/request
-
-Create a delivery request (P2P).
-
-**Body**
-
-```json
-{
+    "routeType": "INTER_CITY",
     "origin": {
-        "country": "Nigeria",
-        "zipCode": "102212",
-        "countryCode": "NG",
-        "lat": 6.617973099999999,
-        "lon": 3.3208916,
-        "googlePlaceId": "ChIJNSzoPHOROxARYADX4-24Io0",
-        "addressLine1": "Agege, Lagos, Nigeria",
-        "addressLine2": "86 Oniwaya Rd, Agege, Lagos 102212, Lagos, Nigeria",
-        "contactName": "Raheem Kawojue",
-        "contactPhone": "+2348131911964",
-        "contactEmail": "kawojue08@gmail.com"
+      "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
+      "lgaOrCity": "Ikeja",
+      "state": "Lagos",
+      "country": "Nigeria",
+      "countryCode": "NG",
+      "lat": 6.6018,
+      "lon": 3.3515,
+      "googlePlaceId": "ChIJorigin"
     },
     "destination": {
-        "country": "Nigeria",
-        "countryCode": "NG",
-        "lat": 6.5244,
-        "lon": 3.3792,
-        "googlePlaceId": "ChIJ6cPolh-QOxAR_rCHmFNKObg",
-        "addressLine1": "Gbagada, Lagos, Nigeria",
-        "contactName": "Jane Recipient",
-        "contactPhone": "+2348098765432",
-        "contactEmail": "jane@example.com"
+      "addressLine1": "Adewole Estate, Surulere Lagos",
+      "lgaOrCity": "Surulere",
+      "state": "Lagos",
+      "country": "Nigeria",
+      "countryCode": "NG",
+      "lat": 6.4969,
+      "lon": 3.3539,
+      "googlePlaceId": "ChIJdest"
+    }
+  }
+}
+```
+
+---
+
+## 5. Fetch fleet types
+
+**`GET /api/fleet-types`**
+
+No query or body parameters.
+
+### Success — `200 OK`
+
+`data` is an array of active fleet types:
+
+| Field         | Type           | Description     |
+| ------------- | -------------- | --------------- |
+| `id`          | UUID           | Fleet type ID   |
+| `name`        | string         | Display name    |
+| `icon`        | string \| null | Icon URL or key |
+| `description` | string \| null | Description     |
+
+### Sample
+
+```json
+{
+  "success": true,
+  "message": "Fleet types fetched successfully",
+  "data": [
+    {
+      "id": "fleet-uuid-1",
+      "name": "Bike",
+      "icon": "https://cdn.waysdrop.com/icons/bike.svg",
+      "description": "Light parcels"
     },
-    "packagesId": ["uuid-1", "uuid-2"],
-    "type": "PICKUP",
-    "courierSelection": "ANYONE",
-    "urgencyType": "PRIORITY",
-    "deliveryDate": "2026-01-24",
-    "deliverySlot": "04:00 - 14:00",
-    "fleetTypeId": "uuid",
-    "requireCollectionProofCode": true,
-    "requireDeliveryProofCode": true,
-    "deliveryFeePayer": "CREATOR",
-    "payOnDelivery": false,
-    "paymentMethodType": "WALLET",
-    "link3rdPartyByContactInfo": true,
-    "note": "Any additional notes"
-}
-```
-
-When using the full object from your map picker, contact fields on `origin` / `destination` satisfy contact requirements — top-level `originContact*` / `destinationContact*` fields are optional in that case.
-
-**Body fields**
-
-| Field                        | Type             | Required  | Description                                                                                                                              |
-| ---------------------------- | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `origin`                     | string \| object | Yes       | Pickup address (see [Origin and destination](#origin-and-destination))                                                                   |
-| `destination`                | string \| object | Yes       | Drop-off address                                                                                                                         |
-| `originContactEmail`         | string           | No        | Defaults to your account email if omitted                                                                                                |
-| `originContactPhone`         | string           | No        | Defaults to your account phone if omitted                                                                                                |
-| `originContactName`          | string           | No        | Defaults to your account name if omitted                                                                                                 |
-| `destinationContactEmail`    | string           | Yes       | Recipient email                                                                                                                          |
-| `destinationContactPhone`    | string           | Yes       | Recipient phone (E.164)                                                                                                                  |
-| `destinationContactName`     | string           | Yes       | Recipient name                                                                                                                           |
-| `note`                       | string           | No        | Delivery notes (max 128 chars)                                                                                                           |
-| `link3rdPartyByContactInfo`  | boolean          | No        | Default `false`. If `true`, notifies the recipient on the Waysdrop app and links the delivery to their account when contact info matches |
-| `notify3rdParty`             | boolean          | No        | Alias for `link3rdPartyByContactInfo`                                                                                                    |
-| `packagesId`                 | string[]         | Yes       | Package UUIDs to deliver                                                                                                                 |
-| `type`                       | enum             | Yes       | `PICKUP` or `DROP_OFF`                                                                                                                   |
-| `urgencyType`                | enum             | No        | `PRIORITY`, `STANDARD`, or `SCHEDULED`                                                                                                   |
-| `deliveryDate`               | string           | SCHEDULED | Required when `urgencyType` is `SCHEDULED`                                                                                               |
-| `deliverySlot`               | string           | SCHEDULED | Time window, e.g. `04:00 - 14:00`                                                                                                        |
-| `fleetTypeId`                | uuid             | No        | Fleet type override                                                                                                                      |
-| `requireCollectionProofCode` | boolean          | No        | Default `true`. Sends a collection proof code to origin contact                                                                          |
-| `requireDeliveryProofCode`   | boolean          | No        | Default `true`. Ignored when `payOnDelivery` is `true` (POD uses its own proof flow)                                                     |
-| `deliveryFeePayer`           | enum             | No        | Default `CREATOR`. `CREATOR` debits Merchant Wallet; `RECIPIENT` or `SPLIT` for other arrangements                                       |
-| `payOnDelivery`              | boolean          | No        | Default `false`. Enable pay-on-delivery collection                                                                                       |
-| `podRemitTo`                 | enum             | POD       | Required when `payOnDelivery` is `true`. `MY_WALLET` (default) or `COURIER_WALLET`                                                       |
-| `podCourierProfileId`        | uuid             | POD       | Required when `podRemitTo` is `COURIER_WALLET`                                                                                           |
-| `paymentMethodType`          | enum             | No        | Default `WALLET`. `WALLET` or `CHECKOUT`                                                                                                 |
-| `courierSelection`           | enum             | Yes       | `ANYONE`, `SPECIFIC`, or `MERCHANT_SPECIAL_COURIERS`                                                                                     |
-| `courierId`                  | uuid             | SPECIFIC  | Required when `courierSelection` is `SPECIFIC`                                                                                           |
-
-**Courier selection**
-
-- `ANYONE` — any available courier on the platform
-- `SPECIFIC` — assign a courier you already have in the system (`courierId` required)
-- `MERCHANT_SPECIAL_COURIERS` — assign from your merchant-specific courier list (requires couriers added in the merchant dashboard)
-
-#### Response — `paymentMethodType: WALLET` (default)
-
-**201 Response**
-
-```json
-{
-    "success": true,
-    "message": "Delivery request created successfully",
-    "data": {
-        "id": "uuid",
-        "deliveryId": "uuid",
-        "userId": "uuid",
-        "profileId": "uuid",
-        "type": "PICKUP",
-        "status": "PENDING",
-        "totalWeight": "9.00000",
-        "totalValue": "250000.00",
-        "createdAt": "2026-01-24T12:34:56.789Z",
-        "updatedAt": "2026-01-24T12:34:56.789Z",
-        "deletedAt": null,
-        "delivery": {
-            "id": "uuid",
-            "userId": "uuid",
-            "trackingId": "P2P-XXXXX",
-            "type": "P2P",
-            "status": "REQUEST_CREATED",
-            "routeType": "INTER_CITY",
-            "fleetTypeId": "uuid",
-            "apiKeyId": "uuid",
-            "distanceKm": 12.743,
-            "etaSeconds": 1649,
-            "deliveryFee": "1550.00",
-            "deliveryFeeTotal": "1550.00",
-            "serviceFee": "150.00",
-            "weightFee": "150.00",
-            "fleetFee": "100.00",
-            "surchargeFee": "100.00",
-            "insuranceFee": "0.00",
-            "baseOrDistanceFee": "1200.00",
-            "deliveryFeePayer": "CREATOR",
-            "courierMatching": "ANYONE",
-            "origin": {
-                "id": "uuid",
-                "country": "Nigeria",
-                "zipCode": "102212",
-                "countryCode": "NG",
-                "lat": 6.617973099999999,
-                "lon": 3.3208916,
-                "googlePlaceId": "ChIJNSzoPHOROxARYADX4-24Io0",
-                "addressLine1": "Agege, Lagos, Nigeria",
-                "addressLine2": "86 Oniwaya Rd, Agege, Lagos 102212, Lagos, Nigeria",
-                "timezone": "Africa/Lagos",
-                "regionName": "SW",
-                "state": "Lagos",
-                "lgaOrCity": "AGEGE",
-                "region": "SW",
-                "subregion": "Western Africa",
-                "continentCode": "AF",
-                "continentName": "Africa",
-                "countryCodeAlpha3": "NGA",
-                "adminUnitId": "NG-LAGOS-AGEGE",
-                "adminUnitName": "AGEGE",
-                "adminUnitType": "admin2",
-                "adminUnitParentId": "NG-LAGOS",
-                "admin1Id": "NG-LAGOS",
-                "admin1Name": "Lagos",
-                "admin2Id": "NG-LAGOS-AGEGE",
-                "admin2Name": "AGEGE",
-                "admin3Name": "Oniwaya/Papa-Uku",
-                "operationalRegionId": "NG-SW",
-                "h3Index": "8a5882643967fff",
-                "phrase": "domeest.ponticello.sidewall",
-                "resolution": 10,
-                "centerLat": 6.617950538557496,
-                "centerLon": 3.320709488840802,
-                "contactName": "Raheem Kawojue",
-                "contactPhone": "+2348131911964",
-                "contactEmail": "kawojue08@gmail.com",
-                "note": "",
-                "createdAt": "2026-01-24T12:34:56.789Z",
-                "updatedAt": "2026-01-24T12:34:56.789Z"
-            },
-            "destination": {
-                "id": "uuid",
-                "country": "Nigeria",
-                "zipCode": "102212",
-                "countryCode": "NG",
-                "lat": 6.5244,
-                "lon": 3.3792,
-                "googlePlaceId": "ChIJ6cPolh-QOxAR_rCHmFNKObg",
-                "addressLine1": "Gbagada, Lagos, Nigeria",
-                "addressLine2": "Gbagada, Lagos, Nigeria",
-                "timezone": "Africa/Lagos",
-                "regionName": "SW",
-                "state": "Lagos",
-                "lgaOrCity": "GBAGADA",
-                "region": "SW",
-                "subregion": "Western Africa",
-                "continentCode": "AF",
-                "continentName": "Africa",
-                "countryCodeAlpha3": "NGA",
-                "admin1Id": "NG-LAGOS",
-                "admin1Name": "Lagos",
-                "operationalRegionId": "NG-SW",
-                "contactName": "Jane Recipient",
-                "contactPhone": "+2348098765432",
-                "contactEmail": "jane@example.com",
-                "note": "",
-                "createdAt": "2026-01-24T12:34:56.789Z",
-                "updatedAt": "2026-01-24T12:34:56.789Z"
-            }
-        },
-        "deliveryFee": {
-            "payer": "CREATOR",
-            "gross": {
-                "delivery": "1550.00",
-                "serviceFee": "150.00",
-                "hubCommission": "0.00",
-                "bundledTotal": "1700.00"
-            },
-            "creator": {
-                "amount": "1700.00",
-                "paymentRequired": true,
-                "paid": true
-            },
-            "recipient": {
-                "amount": "0.00",
-                "paymentRequired": false,
-                "paid": false,
-                "checkoutUrl": null
-            },
-            "promotion": {
-                "settlementMode": null,
-                "platformFunded": false,
-                "settledAmount": "0.00",
-                "discountAmount": "0.00",
-                "isApplied": false
-            }
-        },
-        "matchingEligible": true
+    {
+      "id": "fleet-uuid-2",
+      "name": "Van",
+      "icon": "https://cdn.waysdrop.com/icons/van.svg",
+      "description": "Medium to large parcels"
     }
+  ]
 }
 ```
 
-#### Response — `paymentMethodType: CHECKOUT`
+Fleet choice for pricing/request: if `fleetTypeId` is omitted, the server picks the **best-fit** recommended fleet for the total package weight (all active fleets are scored; `[0]` is used). An explicit active `fleetTypeId` is honored even if it is not the best fit.
 
-Returns a Paystack checkout payload instead of debiting the wallet immediately:
+---
+
+## 6. Get pricing
+
+**`POST /api/pricing`**
+
+Estimates delivery cost before creating a request. Uses the same pricing engine as delivery creation. `costs.insurance` is always `0`.
+
+### Request body
+
+Extends route fields with shipment details:
+
+| Field              | Type   | Required       | Description                                                                         |
+| ------------------ | ------ | -------------- | ----------------------------------------------------------------------------------- |
+| `origin`           | string | Yes            | Address text                                                                        |
+| `destination`      | string | Yes            | Address text                                                                        |
+| `totalWeight`      | number | Yes            | Total weight (kg)                                                                   |
+| `totalValue`       | number | Yes            | Declared value (currency units; use with `inputCurrency` when not corridor default) |
+| `inputCurrency`    | string | No             | ISO 4217 currency of `totalValue` (body write override)                             |
+| `currency`         | string | No (query)     | ISO 4217 display override for cost `*Display` fields on the response                |
+| `urgencyType`      | enum   | No             | `PRIORITY`, `STANDARD`, `SCHEDULED`                                                 |
+| `slot`             | string | If `SCHEDULED` | Delivery slot in **origin local time**, e.g. `"10:00 - 13:00"`                      |
+| `fleetTypeId`      | UUID   | No             | Preferred fleet; omitted → best-fit recommended fleet                               |
+| `courierProfileId` | UUID   | No             | If set, may apply courier-specific route pricing when matched                       |
 
 ```json
 {
-    "success": true,
-    "message": "Delivery request created successfully",
-    "data": {
-        "status": true,
-        "message": "Authorization URL created",
-        "data": {
-            "authorization_url": "https://checkout.paystack.com/...",
-            "access_code": "...",
-            "reference": "..."
-        },
-        "deliveryFee": { "...": "..." },
-        "matchingEligible": false
-    }
+  "origin": "Ladipo Kuku Street, Ikeja Lagos",
+  "destination": "Adewole Estate, Surulere Lagos",
+  "totalWeight": 5,
+  "totalValue": 25000,
+  "urgencyType": "STANDARD",
+  "fleetTypeId": "fleet-uuid-1"
 }
 ```
 
-Courier matching starts after payment succeeds.
-
-#### Response — `payOnDelivery: true`
-
-Adds a `payOnDelivery` block:
-
-```json
-"payOnDelivery": {
-    "enabled": true,
-    "collectAmount": "250000.00",
-    "collectTarget": "PACKAGE_VALUE",
-    "remitTo": "MY_WALLET"
-}
-```
-
-**Response notes**
-
-- `totalWeight` and `totalValue` on the P2P record are **strings** (Decimal).
-- `delivery.distanceKm` is a **number** (float).
-- `delivery.status` is always `REQUEST_CREATED` on create; `status` on the P2P record reflects payment state (`PENDING`, `PENDING_PAYMENT`, etc.).
-- Full `origin` / `destination` use the [resolved address object](#resolved-address-object) plus `id` and timestamps.
-
-**Common errors**
-
-- `422` `Insufficient balance`
-- `400` `Invalid packages selection`
-- `400` `Origin and destination cannot be the same`
-- `404` `Fleet type not found`
-- `404` `No merchant specific couriers found` (when using `MERCHANT_SPECIAL_COURIERS` without configured couriers)
-
-### POST /api/request/:deliveryId/cancel
-
-Cancel an eligible delivery request.
-
-**Path params**
-
-- `deliveryId` (uuid)
-
-**201 Response**
+### Scheduled pricing sample
 
 ```json
 {
-    "success": true,
-    "message": "Delivery request has been canceled",
-    "data": {
-        "delivery": { "id": "uuid" }
-    }
+  "origin": "Ikeja, Lagos",
+  "destination": "Lekki, Lagos",
+  "totalWeight": 3,
+  "totalValue": 10000,
+  "urgencyType": "SCHEDULED",
+  "slot": "10:00 - 13:00"
 }
 ```
 
-**Common errors**
+### Success — `200 OK`
 
-- `404` `Delivery request not found`
-- `400` `Delivery request can not be canceled due to its current status`
-- `400` `You can only cancel a delivery request twice every 3 hours`
+| Field                    | Type           | Description                                                    |
+| ------------------------ | -------------- | -------------------------------------------------------------- |
+| `distance`               | object         | `{ distanceKm, etaSeconds }`                                   |
+| `routeType`              | `RouteType`    | Route classification                                           |
+| `costs.base`             | string/number  | Base distance charge (Decimal)                                 |
+| `costs.weight`           | string/number  | Weight surcharge                                               |
+| `costs.fleet`            | string/number  | Fleet surcharge                                                |
+| `costs.insurance`        | string/number  | `0` for API estimates                                          |
+| `costs.surcharge`        | string/number  | Slot/condition surcharges                                      |
+| `costs.serviceFee`       | string/number  | Platform service fee on declared value                         |
+| `costs.deliverySubtotal` | string/number  | Subtotal before service fee                                    |
+| `costs.total`            | string/number  | **Amount charged** (min ₦1,500 total before service fee logic) |
+| `breakdown`              | object         | Human-readable charge lines (nullable fields)                  |
+| `courierPricingRule`     | object \| null | Set when courier route rule applies                            |
 
-### POST /api/package
-
-Create or edit a package.
-
-**Body**
-
-Use this endpoint to create a new package or update an existing one.
-
-- To **create**, omit `packageId` and provide all required fields.
-- To **update**, include `packageId` and provide only the fields you want to change.
-
-**Create example**
+### Sample — standard
 
 ```json
 {
+  "success": true,
+  "message": "Pricing fetched successfully",
+  "data": {
+    "distance": { "distanceKm": 18.4, "etaSeconds": 2400 },
+    "routeType": "INTER_CITY",
+    "costs": {
+      "base": "3200",
+      "weight": "500",
+      "fleet": "800",
+      "insurance": "0",
+      "surcharge": "0",
+      "serviceFee": "250",
+      "deliverySubtotal": "4500",
+      "total": "4750"
+    },
+    "breakdown": {
+      "baseCharge": "Base distance charge for 18.40km",
+      "weightCharge": "Additional charge for 5kg",
+      "insuranceCharge": null,
+      "fleetCharge": "Fleet charge for Bike delivery",
+      "surchargeCharge": null,
+      "serviceFeeCharge": "Platform service fee"
+    },
+    "courierPricingRule": null
+  }
+}
+```
+
+### Errors
+
+| Status | Message (examples)                       |
+| ------ | ---------------------------------------- |
+| `404`  | Fleet type not found                     |
+| `400`  | No fleet type found for the given weight |
+| `400`  | Unable to determine distance             |
+
+---
+
+## 7. Create or edit package
+
+**`POST /api/package`**
+
+### Request body — create
+
+| Field           | Type           | Required | Description                                                                        |
+| --------------- | -------------- | -------- | ---------------------------------------------------------------------------------- |
+| `name`          | string         | Yes      | Package name                                                                       |
+| `quantity`      | integer        | Yes      | Item count                                                                         |
+| `value`         | number         | Yes      | Declared value (native units; pair with `inputCurrency` when not corridor default) |
+| `inputCurrency` | string         | No       | ISO 4217 currency of `value` on create/edit                                        |
+| `currency`      | string (query) | No       | ISO 4217 display override for `valueDisplay` on the response                       |
+| `size`          | enum           | Yes      | `SMALL` (≈2 kg), `MEDIUM` (≈7 kg), `LARGE` (≈15 kg)                                |
+| `packageType`   | string         | No       | Category label                                                                     |
+| `description`   | string         | No       | Max 128 chars                                                                      |
+| `image`         | string (URL)   | No       | HTTPS URL; host must be `cdn.waysdrop.com`                                         |
+
+```json
+{
+  "name": "Electronics box",
+  "quantity": 1,
+  "value": 50000,
+  "size": "MEDIUM",
+  "packageType": "Electronics",
+  "description": "Fragile",
+  "image": "https://cdn.waysdrop.com/uploads/pkg.jpg"
+}
+```
+
+### Request body — edit
+
+| Field       | Type | Required | Description                                        |
+| ----------- | ---- | -------- | -------------------------------------------------- |
+| `packageId` | UUID | Yes      | Existing package ID                                |
+| _(others)_  |      | No       | Any updatable fields (`name`, `value`, `image`, …) |
+
+```json
+{
+  "packageId": "pkg-uuid-here",
+  "value": 55000,
+  "description": "Updated note"
+}
+```
+
+Cannot edit a package already linked to a delivery (`400`).
+
+### Success — `201 Created`
+
+`data` is the full `DeliveryPackage` row (`id`, `name`, `weight`, `value`, `size`, `quantity`, FX snapshot fields when value was set, optional `valueDisplay` when `?currency=` is passed, …). `weight` is derived from `size` on create. **`value` is USD catalog**; native input is preserved on `inputCurrencyCode` / `inputAmount`.
+
+### Sample — created
+
+```json
+{
+  "success": true,
+  "message": "Package saved successfully",
+  "data": {
+    "id": "pkg-uuid-1",
+    "name": "Electronics box",
     "packageType": "Electronics",
-    "image": "https://cdn.waysdrop.com/packages/laptop.jpg",
-    "name": "Laptop",
-    "description": "Package description",
+    "image": "https://cdn.waysdrop.com/uploads/pkg.jpg",
+    "description": "Fragile",
     "quantity": 1,
-    "size": "SMALL",
-    "value": 250000
+    "weight": "7",
+    "value": "50000",
+    "size": "MEDIUM",
+    "type": "PACKAGE_ITEM",
+    "p2pDeliveryId": null,
+    "userId": "user-uuid",
+    "createdAt": "2026-05-15T10:00:00.000Z",
+    "updatedAt": "2026-05-15T10:00:00.000Z",
+    "deletedAt": null
+  }
 }
 ```
 
-**Update example**
+---
+
+## 8. Delete package
+
+**`DELETE /api/package/:packageId`**
+
+### Path params
+
+| Param       | Type | Description       |
+| ----------- | ---- | ----------------- |
+| `packageId` | UUID | Package to delete |
+
+### Success — `204 No Content`
+
+No body.
+
+### Errors
+
+| Status | Message                         |
+| ------ | ------------------------------- |
+| `404`  | Package not found               |
+| `400`  | Package is already in a request |
+
+---
+
+## 9. List packages
+
+**`GET /api/packages`**
+
+Returns packages for the API key owner that are **not** attached to any P2P delivery.
+
+Optional query: `?currency=NGN` (or any supported ISO 4217 code) to override `valueDisplay` on each row.
+
+### Success — `200 OK`
+
+`data` is an array of `DeliveryPackage` records (plus optional `valueDisplay`), newest first.
+
+### Sample — with packages
 
 ```json
 {
-    "packageId": "uuid",
-    "description": "Updated description"
-}
-```
-
-**Fields**
-
-| Field         | Type   | Required on create | Description                                            |
-| ------------- | ------ | ------------------ | ------------------------------------------------------ |
-| `packageId`   | uuid   | No                 | Include to update an existing package                  |
-| `packageType` | string | Yes                | Category label                                         |
-| `image`       | url    | No                 | Must be hosted on `cdn.waysdrop.com`                   |
-| `name`        | string | Yes                | Package name                                           |
-| `description` | string | No                 | Max 128 chars                                          |
-| `quantity`    | int    | Yes                | Number of items                                        |
-| `size`        | enum   | Yes                | `SMALL` (≈2 kg), `MEDIUM` (≈7 kg), or `LARGE` (≈15 kg) |
-| `value`       | number | Yes                | Total value in NGN                                     |
-
-Weight is derived from `size` on create — you do not send `weight` directly.
-
-**201 Response**
-
-```json
-{
-    "success": true,
-    "message": "Package saved successfully",
-    "data": {
-        "id": "uuid",
-        "userId": "uuid",
-        "p2pDeliveryId": null,
-        "errandDeliveryId": null,
-        "errandStoreId": null,
-        "productId": null,
-        "variantCombinationId": null,
-        "packageType": "Electronics",
-        "name": "Laptop",
-        "image": "https://cdn.waysdrop.com/....jpg",
-        "description": "Package description",
-        "quantity": 1,
-        "weight": "2.00000",
-        "value": "250000.00",
-        "size": "SMALL",
-        "type": "PACKAGE_ITEM",
-        "selectedOptions": [],
-        "createdAt": "2026-01-24T12:34:56.789Z",
-        "updatedAt": "2026-01-24T12:34:56.789Z",
-        "deletedAt": null
+  "success": true,
+  "message": "Packages retrieved successfully",
+  "data": [
+    {
+      "id": "pkg-uuid-1",
+      "name": "Electronics box",
+      "weight": "7",
+      "value": "50000",
+      "size": "MEDIUM",
+      "quantity": 1,
+      "p2pDeliveryId": null
     }
+  ]
 }
 ```
 
-### DELETE /api/package/:packageId
-
-Delete a package.
-
-**Path params**
-
-- `packageId` (uuid)
-
-**204 Response**
-
-- No content
-
-### GET /api/packages
-
-Get packages that have not been assigned to a delivery (for the authenticated user).
-
-**200 Response**
+### Sample — empty
 
 ```json
 {
-    "success": true,
-    "message": "Packages retrieved successfully",
-    "data": [
-        {
-            "id": "uuid",
-            "userId": "uuid",
-            "p2pDeliveryId": null,
-            "packageType": "Electronics",
-            "name": "Laptop",
-            "image": "https://cdn.waysdrop.com/....jpg",
-            "description": "Package description",
-            "quantity": 1,
-            "weight": "2.00000",
-            "value": "250000.00",
-            "size": "SMALL",
-            "type": "PACKAGE_ITEM",
-            "selectedOptions": [],
-            "createdAt": "2026-01-24T12:34:56.789Z",
-            "updatedAt": "2026-01-24T12:34:56.789Z",
-            "deletedAt": null
-        }
+  "success": true,
+  "message": "Packages retrieved successfully",
+  "data": []
+}
+```
+
+---
+
+## 10. Create delivery request
+
+**`POST /api/request`**
+
+Creates a **P2P** delivery and collects any upfront creator share via **merchant wallet** or **hosted checkout**. Supports the same payment flags as the partner integration (`deliveryFeePayer`, `payPackageValue`, `payOnDelivery`, …).
+
+Optional query: `?currency=NGN` — display-only override for `*Display` fields on the response (does not change checkout processor or charge currency).
+
+### Request body
+
+| Field                        | Type        | Required       | Description                                                               |
+| ---------------------------- | ----------- | -------------- | ------------------------------------------------------------------------- |
+| `origin`                     | string      | Yes            | Pickup address (max 255)                                                  |
+| `destination`                | string      | Yes            | Drop-off address (max 255)                                                |
+| `packagesId`                 | UUID[]      | Yes            | Unassigned package IDs (must all belong to user)                          |
+| `type`                       | enum        | Yes            | `PICKUP` or `DROP_OFF`                                                    |
+| `courierSelection`           | enum        | Yes            | `ANYONE`, `SPECIFIC`, `MERCHANT_SPECIAL_COURIERS`                         |
+| `courierId`                  | UUID        | If `SPECIFIC`  | Courier profile ID                                                        |
+| `destinationContactName`     | string      | Yes            | Recipient name                                                            |
+| `destinationContactEmail`    | string      | Yes            | Recipient email                                                           |
+| `destinationContactPhone`    | string      | Yes            | E.164 phone                                                               |
+| `originContactName`          | string      | No             | Defaults to API user fullname                                             |
+| `originContactEmail`         | string      | No             | Defaults to API user email                                                |
+| `originContactPhone`         | string      | No             | Defaults to API user phone                                                |
+| `note`                       | string      | No             | Delivery notes (max 128)                                                  |
+| `urgencyType`                | enum        | No             | `PRIORITY`, `STANDARD`, `SCHEDULED`                                       |
+| `deliveryDate`               | date string | If `SCHEDULED` | e.g. `"2025-06-01"`                                                       |
+| `deliverySlot`               | string      | If `SCHEDULED` | Valid slot for date                                                       |
+| `fleetTypeId`                | UUID        | No             | Auto-selected best-fit fleet if omitted                                   |
+| `deliveryFeePayer`           | enum        | No             | `CREATOR` (default), `RECIPIENT`, `SPLIT`                                 |
+| `paymentMethodType`          | enum        | No             | `WALLET` (default) or `CHECKOUT`                                          |
+| `payPackageValue`            | boolean     | No             | Charge declared package value upfront with creator share                  |
+| `payOnDelivery`              | boolean     | No             | Collect package value at door (mutually exclusive with `payPackageValue`) |
+| `podRemitTo`                 | enum        | If POD         | `MY_WALLET` or `COURIER_WALLET`                                           |
+| `currency`                   | string      | No (body)      | Display-only override (same as `?currency=`)                              |
+| `requireCollectionProofCode` | boolean     | No             | Default `true`                                                            |
+| `requireDeliveryProofCode`   | boolean     | No             | Default `true`                                                            |
+| `link3rdPartyByContactInfo`  | boolean     | No             | Default `false`                                                           |
+
+**Courier selection notes:**
+
+- `MERCHANT_SPECIAL_COURIERS` — user must have at least one merchant-specific courier (`404` if empty). Use merchant dashboard / `docs/merchant-api.md` to manage the list.
+- `SPECIFIC` — courier must exist, type `Courier`, and not be `SUSPENDED`.
+
+**Scheduling:** `deliveryDate` and `deliverySlot` must be paired. When both are sent, the server auto-sets `urgencyType` to `SCHEDULED` if omitted. Slots use origin local timezone (address timezone → country geo lookup → `APP_TIME_ZONE` → `Africa/Lagos`), require at least a one-hour window, and cannot be expired. Quote/cost requests include time surcharges when `slot` is provided for `SCHEDULED` deliveries.
+
+**Payment:**
+
+| `paymentMethodType` | Behaviour                                                                                                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `WALLET` (default)  | Debits **merchant wallet** in native wallet currency when you owe an upfront creator share. `422` if insufficient balance.                                                           |
+| `CHECKOUT`          | Returns hosted checkout fields when you owe an upfront share. Redirect using `authorization_url` or `checkout_url`. Matching for paid flows starts after payment confirms (webhook). |
+
+When `deliveryFeePayer` is `RECIPIENT` or `SPLIT`, the customer may receive their own checkout link (`deliveryFee.recipient.checkoutUrl`). Courier matching starts only when `matchingEligible: true`.
+
+Full flag matrix: [PARTNER_API_INTEGRATION.md](./partner/PARTNER_API_INTEGRATION.md#payment-flags-reference).
+
+### Sample — standard request
+
+```json
+{
+  "origin": "12 Allen Avenue, Ikeja, Lagos",
+  "destination": "45 Admiralty Way, Lekki, Lagos",
+  "packagesId": ["pkg-uuid-1", "pkg-uuid-2"],
+  "type": "PICKUP",
+  "courierSelection": "ANYONE",
+  "destinationContactName": "Jane Recipient",
+  "destinationContactEmail": "jane@example.com",
+  "destinationContactPhone": "+2348012345678",
+  "note": "Call on arrival",
+  "urgencyType": "STANDARD",
+  "requireCollectionProofCode": true,
+  "requireDeliveryProofCode": true
+}
+```
+
+### Sample — specific courier
+
+```json
+{
+  "origin": "12 Allen Avenue, Ikeja, Lagos",
+  "destination": "45 Admiralty Way, Lekki, Lagos",
+  "packagesId": ["pkg-uuid-1"],
+  "type": "DROP_OFF",
+  "courierSelection": "SPECIFIC",
+  "courierId": "787db687-d0d9-425a-955e-aa52d6572da9",
+  "destinationContactName": "Jane Recipient",
+  "destinationContactEmail": "jane@example.com",
+  "destinationContactPhone": "+2348012345678"
+}
+```
+
+### Sample — scheduled
+
+```json
+{
+  "origin": "Ikeja, Lagos",
+  "destination": "Abuja, FCT",
+  "packagesId": ["pkg-uuid-1"],
+  "type": "PICKUP",
+  "courierSelection": "ANYONE",
+  "urgencyType": "SCHEDULED",
+  "deliveryDate": "2026-06-01",
+  "deliverySlot": "10:00 - 13:00",
+  "destinationContactName": "Jane Recipient",
+  "destinationContactEmail": "jane@example.com",
+  "destinationContactPhone": "+2348012345678"
+}
+```
+
+### Success — `201 Created`
+
+`data` shape depends on payment path:
+
+| Path                                | Top-level fields                                                                                                                                                                   |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`WALLET`** (creator share paid)   | P2P/delivery record (`id`, `deliveryId`, nested `delivery`, `totalValue`, …) plus `deliveryFee` responsibility block                                                               |
+| **`CHECKOUT`** (creator share owed) | Hosted checkout: `processor`, `charge_currency`, `charge_amount`, `amount_usd`, `reference`, `authorization_url` / `checkout_url`, plus `deliveryFee` / `payPackageValue` metadata |
+
+When `?currency=` is passed, USD catalog fields also include optional `*Display` companions (e.g. `totalValueDisplay`, `deliveryFee.creator.amountDisplay`).
+
+**Checkout processor selection:** corridor-based — Nigeria → Paystack or Nomba (env), other supported countries → Stripe (local currency or USD fallback). Not chosen by the merchant in the request body.
+
+Key fields on nested `delivery` (when present):
+
+| Field                      | Description                          |
+| -------------------------- | ------------------------------------ |
+| `id`                       | Delivery UUID (use for cancel & get) |
+| `trackingId`               | Public tracking code                 |
+| `status`                   | Initially `REQUEST_CREATED`          |
+| `deliveryFee`              | Total charged (Decimal string)       |
+| `distanceKm`, `etaSeconds` | From route calculation               |
+| `courierMatching`          | Echo of `courierSelection`           |
+
+Nested `p2pDelivery`:
+
+| Field                       | Description              |
+| --------------------------- | ------------------------ |
+| `id`                        | P2P record ID            |
+| `status`                    | `PENDING`                |
+| `type`                      | `PICKUP` / `DROP_OFF`    |
+| `totalWeight`, `totalValue` | Aggregated from packages |
+
+### Sample — created
+
+```json
+{
+  "success": true,
+  "message": "Delivery request created successfully",
+  "data": {
+    "id": "p2p-uuid",
+    "type": "PICKUP",
+    "status": "PENDING",
+    "totalWeight": "14",
+    "totalValue": "100000",
+    "userId": "user-uuid",
+    "profileId": "personal-profile-uuid",
+    "deliveryId": "delivery-uuid",
+    "delivery": {
+      "id": "delivery-uuid",
+      "trackingId": "P2P-ABC123",
+      "status": "REQUEST_CREATED",
+      "type": "P2P",
+      "routeType": "INTER_CITY",
+      "deliveryFee": "4750",
+      "distanceKm": 18.4,
+      "etaSeconds": 2400,
+      "courierMatching": "ANYONE",
+      "origin": {
+        "id": "addr-origin-uuid",
+        "addressLine1": "12 Allen Avenue, Ikeja, Lagos",
+        "lgaOrCity": "Ikeja",
+        "state": "Lagos",
+        "lat": 6.6018,
+        "lon": 3.3515
+      },
+      "destination": {
+        "id": "addr-dest-uuid",
+        "addressLine1": "45 Admiralty Way, Lekki, Lagos",
+        "lgaOrCity": "Lekki",
+        "state": "Lagos",
+        "lat": 6.4474,
+        "lon": 3.47
+      }
+    }
+  }
+}
+```
+
+### Errors
+
+| Status | Message (examples)                        |
+| ------ | ----------------------------------------- |
+| `422`  | Insufficient balance                      |
+| `400`  | Invalid packages selection                |
+| `400`  | Origin and destination cannot be the same |
+| `400`  | No fleet type found for the given weight  |
+| `404`  | No merchant specific couriers found…      |
+| `404`  | Courier profile not found                 |
+| `400`  | Selected courier profile is suspended     |
+
+---
+
+## 11. Cancel delivery request
+
+**`POST /api/request/:deliveryId/cancel`**
+
+### Path params
+
+| Param        | Type | Description                        |
+| ------------ | ---- | ---------------------------------- |
+| `deliveryId` | UUID | `delivery.id` from create response |
+
+### Success — `201 Created`
+
+```json
+{
+  "success": true,
+  "message": "Delivery request has been canceled",
+  "data": {
+    "delivery": {
+      "id": "delivery-uuid"
+    }
+  }
+}
+```
+
+Refunds successful wallet payments back to the merchant wallet when applicable (native amount using **source payment FX** — see [multi-currency-money-ledger-guide.md](./multi-currency-money-ledger-guide.md)). A webhook event `p2p.delivery.cancelled` may be emitted if configured on the API key.
+
+### Cancellation rules
+
+Allowed only when delivery status is:
+
+- `REQUEST_CREATED`, or
+- `ASSIGNING`, or
+- `AWAITING_COLLECTION` **and** `routeType === INTER_CITY`
+
+Additional limits:
+
+- Max **2** cancellations per user in a rolling **5-hour** window
+- Concurrent cancel for same user/delivery: `429` if lock held
+
+### Errors
+
+| Status | Message (examples)                                             |
+| ------ | -------------------------------------------------------------- |
+| `404`  | Delivery request not found                                     |
+| `400`  | Delivery request can not be canceled due to its current status |
+| `400`  | You can only cancel a delivery request twice every 5 hours     |
+| `429`  | There is currently an ongoing p2p request cancellation…        |
+
+---
+
+## 12. Get delivery
+
+**`GET /api/deliveries/:deliveryId`**
+
+### Path params
+
+| Param        | Type | Description |
+| ------------ | ---- | ----------- |
+| `deliveryId` | UUID | Delivery ID |
+
+Must belong to the API key owner.
+
+### Success — `200 OK`
+
+`data` is the delivery record plus:
+
+| Field                   | Type                | Description                                     |
+| ----------------------- | ------------------- | ----------------------------------------------- |
+| `origin`, `destination` | Address             | Full address rows                               |
+| `deliverySteps`         | array               | Visible steps: `step`, `active`, `updatedAt`    |
+| `proofs`                | array               | Proof records; `code` is **null** until scanned |
+| `fleetType`             | object              | `{ id, name, icon }`                            |
+| `p2pDelivery`           | object              | Linked P2P row                                  |
+| `courier`               | object \| undefined | Present when a courier is assigned              |
+
+**`courier`** (when assigned):
+
+| Field                           | Type                   | Description                          |
+| ------------------------------- | ---------------------- | ------------------------------------ |
+| `name`, `phone`, `profilePhoto` | string                 | Courier contact                      |
+| `fleet`                         | object \| null         | Vehicle matching delivery fleet type |
+| `currentLocation`               | object \| null         | Live coords if available             |
+| `eta`                           | `{ from, to }` \| null | ISO timestamps for ETA window        |
+
+### Sample — assigning (no courier yet)
+
+```json
+{
+  "success": true,
+  "message": "Delivery retrieved successfully",
+  "data": {
+    "id": "delivery-uuid",
+    "trackingId": "P2P-ABC123",
+    "status": "ASSIGNING",
+    "type": "P2P",
+    "routeType": "INTER_CITY",
+    "deliveryFee": "4750",
+    "distanceKm": 18.4,
+    "etaSeconds": 2400,
+    "origin": {
+      "lgaOrCity": "Ikeja",
+      "state": "Lagos",
+      "lat": 6.6018,
+      "lon": 3.3515
+    },
+    "destination": {
+      "lgaOrCity": "Lekki",
+      "state": "Lagos",
+      "lat": 6.4474,
+      "lon": 3.47
+    },
+    "deliverySteps": [
+      {
+        "id": "step-1",
+        "step": "REQUEST_CREATED",
+        "active": false,
+        "updatedAt": "..."
+      },
+      {
+        "id": "step-2",
+        "step": "ASSIGNING",
+        "active": true,
+        "updatedAt": "..."
+      }
+    ],
+    "proofs": [],
+    "fleetType": { "id": "fleet-uuid-1", "name": "Bike", "icon": "..." },
+    "p2pDelivery": { "id": "p2p-uuid", "status": "PENDING", "type": "PICKUP" }
+  }
+}
+```
+
+### Sample — in transit (courier assigned)
+
+```json
+{
+  "success": true,
+  "message": "Delivery retrieved successfully",
+  "data": {
+    "id": "delivery-uuid",
+    "trackingId": "P2P-ABC123",
+    "status": "IN_TRANSIT",
+    "courier": {
+      "name": "Ada Courier",
+      "phone": "+2348012345678",
+      "profilePhoto": "https://cdn.waysdrop.com/photos/courier.jpg",
+      "fleet": {
+        "regNo": "ABC-123XY",
+        "make": "Honda",
+        "model": "CB125",
+        "colour": "Red",
+        "typeId": "fleet-uuid-1"
+      },
+      "currentLocation": {
+        "lat": 6.52,
+        "lon": 3.38,
+        "lgaOrCity": "Victoria Island"
+      },
+      "eta": {
+        "from": "2026-05-15T14:10:00.000Z",
+        "to": "2026-05-15T14:35:00.000Z"
+      }
+    },
+    "proofs": [
+      {
+        "id": "proof-uuid",
+        "type": "COLLECTION",
+        "code": null,
+        "scannedAt": null
+      }
     ]
+  }
 }
 ```
 
-Returns the full `DeliveryPackage` record for each unassigned package.
+### Errors
 
-### GET /api/deliveries/:deliveryId
+| Status | Message            |
+| ------ | ------------------ |
+| `404`  | Delivery not found |
 
-Get a delivery (for the authenticated user).
+---
 
-**Path params**
+## Recommended integration flow
 
-- `deliveryId` (uuid)
+```mermaid
+sequenceDiagram
+  participant Client
+  participant API as /api
 
-**200 Response**
+  Client->>API: POST /api/package
+  API-->>Client: 201 package id
+  Client->>API: POST /api/pricing
+  API-->>Client: 200 costs.total
+  Client->>API: POST /api/request
+  API-->>Client: 201 delivery + trackingId
+  loop Poll or webhook
+    Client->>API: GET /api/deliveries/:deliveryId
+    API-->>Client: 200 status + courier
+  end
+  opt Cancel before pickup
+    Client->>API: POST /api/request/:id/cancel
+    API-->>Client: 201 + refund
+  end
+```
+
+1. **Packages:** `POST /api/package` → `GET /api/packages`
+2. **Quote:** `POST /api/route` (optional) → `POST /api/pricing`
+3. **Preflight:** `GET /api/wallet` (optional) — confirm merchant wallet balance before `WALLET` checkout
+4. **Book:** `POST /api/request` (ensure merchant wallet balance ≥ creator share when using `WALLET`)
+5. **Track:** `GET /api/deliveries/:deliveryId` or `GET /api/deliveries`
+6. **Cancel:** `POST /api/request/:deliveryId/cancel` when eligible
+
+---
+
+## 13. List deliveries
+
+**`GET /api/deliveries`**
+
+Returns deliveries created with the **current API key** (`delivery.apiKeyId`), newest first.
+
+### Query params
+
+| Param      | Type   | Required | Description                                              |
+| ---------- | ------ | -------- | -------------------------------------------------------- |
+| `page`     | number | No       | Default `1`                                              |
+| `limit`    | number | No       | Default `20`, max `100`                                  |
+| `search`   | string | No       | Filter by `trackingId` (case-insensitive contains)       |
+| `status`   | enum   | No       | `DeliveryStatus` filter                                  |
+| `currency` | string | No       | Display-only override for `*Display` fields on each row |
+
+### Success — `200 OK`
 
 ```json
 {
-    "success": true,
-    "message": "Delivery retrieved successfully",
-    "data": {
+  "success": true,
+  "message": "Deliveries retrieved successfully",
+  "data": {
+    "data": [
+      {
         "id": "uuid",
-        "userId": "uuid",
-        "trackingId": "P2P-XXXXX",
-        "type": "P2P",
+        "trackingId": "P2P-…",
         "status": "IN_TRANSIT",
-        "routeType": "INTER_CITY",
-        "distanceKm": 12.743,
-        "etaSeconds": 1649,
-        "deliveryFee": "1550.00",
-        "deliveryFeeTotal": "1550.00",
-        "serviceFee": "150.00",
-        "weightFee": "150.00",
-        "fleetFee": "100.00",
-        "surchargeFee": "100.00",
-        "insuranceFee": "0.00",
-        "baseOrDistanceFee": "1200.00",
-        "deliveryFeePayer": "CREATOR",
-        "courierMatching": "ANYONE",
-        "requireCollectionProofCode": true,
-        "requireDeliveryProofCode": true,
-        "link3rdPartyByContactInfo": true,
-        "urgencyType": "PRIORITY",
-        "deliveryDate": "2026-01-24T00:00:00.000Z",
-        "deliverySlot": "04:00 - 14:00",
-        "fleetTypeId": "uuid",
-        "createdAt": "2026-01-24T12:34:56.789Z",
-        "updatedAt": "2026-01-24T12:40:00.000Z",
-        "fleetType": {
-            "id": "uuid",
-            "name": "Bike",
-            "icon": "https://cdn.waysdrop.com/..."
+        "type": "P2P",
+        "deliveryFee": "4.75",
+        "deliveryFeeDisplay": {
+          "usd": 4.75,
+          "local": { "currency": "NGN", "amount": 7125, "symbol": "₦" }
         },
         "p2pDelivery": {
-            "id": "uuid",
-            "deliveryId": "uuid",
-            "userId": "uuid",
-            "profileId": "uuid",
-            "type": "PICKUP",
-            "status": "PENDING",
-            "totalWeight": "9.00000",
-            "totalValue": "250000.00",
-            "createdAt": "2026-01-24T12:34:56.789Z",
-            "updatedAt": "2026-01-24T12:34:56.789Z"
+          "id": "uuid",
+          "totalValue": "100.00",
+          "totalValueDisplay": { "usd": 100, "local": { "currency": "NGN", "amount": 150000 } }
         },
-        "origin": {
-            "id": "uuid",
-            "country": "Nigeria",
-            "zipCode": "102212",
-            "countryCode": "NG",
-            "lat": 6.617973099999999,
-            "lon": 3.3208916,
-            "googlePlaceId": "ChIJNSzoPHOROxARYADX4-24Io0",
-            "addressLine1": "Agege, Lagos, Nigeria",
-            "addressLine2": "86 Oniwaya Rd, Agege, Lagos 102212, Lagos, Nigeria",
-            "timezone": "Africa/Lagos",
-            "regionName": "SW",
-            "state": "Lagos",
-            "lgaOrCity": "AGEGE",
-            "region": "SW",
-            "subregion": "Western Africa",
-            "continentCode": "AF",
-            "continentName": "Africa",
-            "countryCodeAlpha3": "NGA",
-            "adminUnitId": "NG-LAGOS-AGEGE",
-            "adminUnitName": "AGEGE",
-            "adminUnitType": "admin2",
-            "adminUnitParentId": "NG-LAGOS",
-            "admin1Id": "NG-LAGOS",
-            "admin1Name": "Lagos",
-            "admin2Id": "NG-LAGOS-AGEGE",
-            "admin2Name": "AGEGE",
-            "admin3Name": "Oniwaya/Papa-Uku",
-            "operationalRegionId": "NG-SW",
-            "h3Index": "8a5882643967fff",
-            "phrase": "domeest.ponticello.sidewall",
-            "resolution": 10,
-            "centerLat": 6.617950538557496,
-            "centerLon": 3.320709488840802,
-            "contactName": "Raheem Kawojue",
-            "contactPhone": "+2348131911964",
-            "contactEmail": "kawojue08@gmail.com",
-            "note": "",
-            "createdAt": "2026-01-24T12:34:56.789Z",
-            "updatedAt": "2026-01-24T12:34:56.789Z"
-        },
-        "destination": {
-            "id": "uuid",
-            "country": "Nigeria",
-            "zipCode": "102212",
-            "countryCode": "NG",
-            "lat": 6.5244,
-            "lon": 3.3792,
-            "googlePlaceId": "ChIJ6cPolh-QOxAR_rCHmFNKObg",
-            "addressLine1": "Gbagada, Lagos, Nigeria",
-            "addressLine2": "Gbagada, Lagos, Nigeria",
-            "timezone": "Africa/Lagos",
-            "regionName": "SW",
-            "state": "Lagos",
-            "lgaOrCity": "GBAGADA",
-            "region": "SW",
-            "subregion": "Western Africa",
-            "continentCode": "AF",
-            "continentName": "Africa",
-            "countryCodeAlpha3": "NGA",
-            "admin1Id": "NG-LAGOS",
-            "admin1Name": "Lagos",
-            "operationalRegionId": "NG-SW",
-            "contactName": "Jane Recipient",
-            "contactPhone": "+2348098765432",
-            "contactEmail": "jane@example.com",
-            "note": "",
-            "createdAt": "2026-01-24T12:34:56.789Z",
-            "updatedAt": "2026-01-24T12:34:56.789Z"
-        },
-        "proofs": [
-            {
-                "id": "uuid",
-                "type": "COLLECTION",
-                "code": null,
-                "isActive": false,
-                "scannedAt": null,
-                "createdAt": "2026-01-24T12:34:56.789Z"
-            }
-        ],
-        "deliverySteps": [
-            {
-                "id": "uuid",
-                "step": "REQUEST_CREATED",
-                "active": false,
-                "updatedAt": "2026-01-24T12:34:56.789Z"
-            },
-            {
-                "id": "uuid",
-                "step": "IN_TRANSIT",
-                "active": true,
-                "updatedAt": "2026-01-24T12:40:00.000Z"
-            }
-        ],
-        "courier": {
-            "name": "Courier name",
-            "phone": "+2348012345678",
-            "profilePhoto": "https://cdn.waysdrop.com/....jpg",
-            "currentLocation": {
-                "country": "Nigeria",
-                "state": "Lagos",
-                "lgaOrCity": "Ikeja",
-                "lat": 6.6018,
-                "lon": 3.3515
-            },
-            "eta": {
-                "from": "2026-01-24T12:50:00.000Z",
-                "to": "2026-01-24T13:30:00.000Z"
-            },
-            "fleet": {
-                "regNo": "ABC-123",
-                "make": "Honda",
-                "model": "CBR",
-                "colour": "Red",
-                "typeId": "uuid"
-            }
-        }
-    }
+        "createdAt": "2026-08-06T16:00:00.000Z"
+      }
+    ],
+    "meta": { "total": 42, "page": 1, "limit": 20, "totalPages": 3 }
+  }
 }
 ```
 
-**Response notes**
+---
 
-- The delivery object includes all scalar `Delivery` fields — the example shows the most useful ones.
-- `origin` and `destination` use the full [resolved address object](#resolved-address-object) with `id` and timestamps.
-- `courier` is **omitted** (not `null`) until a courier is assigned.
-- `currentLocation` uses flat `lat` / `lon`, not a nested `loc` object.
-- Proof `code` is `null` until the proof has been scanned (`scannedAt` is set).
-- `deliverySteps` only includes visible steps (`hidden` steps are excluded).
-- `p2pDelivery.totalWeight` and `totalValue` are **strings** (Decimal).
+## 14. Get merchant wallet
+
+**`GET /api/wallet`**
+
+Returns the API key owner's **merchant wallet** (`WalletChannel.MERCHANT`). Balance is in **native wallet currency**, not USD catalog.
+
+Optional query: `?currency=NGN` — display-only override for `balanceDisplay`.
+
+### Success — `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Merchant wallet retrieved successfully",
+  "data": {
+    "id": "uuid",
+    "currencyCode": "NGN",
+    "balance": "172500.00",
+    "balanceDisplay": {
+      "usd": 115,
+      "local": { "currency": "NGN", "amount": 172500, "symbol": "₦" }
+    }
+  }
+}
+```
+
+---
+
+## 15. Get account summary
+
+**`GET /api/account`**
+
+Lightweight corridor summary for bootstrapping FX/display in your integration.
+
+### Success — `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Account retrieved successfully",
+  "data": {
+    "userId": "uuid",
+    "countryCode": "NG",
+    "displayCurrency": "NGN",
+    "merchantWalletCurrencyCode": "NGN",
+    "storeProfile": {
+      "id": "uuid",
+      "name": "My Store",
+      "tag": "my-store-core"
+    }
+  }
+}
+```
+
+`storeProfile` is `null` when the key owner has no active store profile.
+
+---
+
+## 16. Exchange rate
+
+**`GET /api/exchange-rate`**
+
+Partner-namespace alias for FX lookup. Requires **`api-key`** header.
+
+### Query params
+
+| Param  | Type   | Required | Description        |
+| ------ | ------ | -------- | ------------------ |
+| `from` | string | Yes      | ISO 4217 (3 letters) |
+| `to`   | string | Yes      | ISO 4217 (3 letters) |
+
+### Success — `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Exchange rate fetched successfully",
+  "data": {
+    "from": "USD",
+    "to": "NGN",
+    "rate": 1500,
+    "isStale": false
+  }
+}
+```
+
+JWT clients may also use `GET /currency/rate` with the same query params.
+
+---
+
+## 17. Convert currency
+
+**`GET /api/convert`**
+
+### Query params
+
+| Param    | Type   | Required | Description        |
+| -------- | ------ | -------- | ------------------ |
+| `from`   | string | Yes      | ISO 4217 source    |
+| `to`     | string | Yes      | ISO 4217 target    |
+| `amount` | number | Yes      | Amount in `from` currency |
+
+### Success — `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Amount converted successfully",
+  "data": {
+    "from": "USD",
+    "to": "NGN",
+    "amount": 100,
+    "convertedAmount": 150000,
+    "rate": 1500,
+    "isStale": false
+  }
+}
+```
+
+---
+
+## Enums reference
+
+```ts
+// P2pDeliveryType
+'PICKUP' | 'DROP_OFF'
+
+// UrgencyType
+'PRIORITY' | 'STANDARD' | 'SCHEDULED'
+
+// CourierMatching
+'ANYONE' | 'SPECIFIC' | 'MERCHANT_SPECIAL_COURIERS'
+
+// DeliveryPackageSize (weight mapping on create)
+'SMALL'   // ~2 kg
+'MEDIUM'  // ~7 kg
+'LARGE'   // ~15 kg
+
+// RouteType (route/pricing responses)
+'INTER_CITY' | 'INTER_STATE' | 'INTER_REGION' | 'INTER_COUNTRY' | 'INTER_CONTINENT'
+
+// DeliveryStatus (tracking)
+'REQUEST_CREATED' | 'ASSIGNING' | 'AWAITING_COLLECTION' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED' | ...
+```
+
+---
+
+## Related docs
+
+- [Merchant API](/api-reference/merchant) — merchant courier list & courier delivery fee rules
+- Delivery fee integration guide (internal) — `deliveryFee` vs `deliveryFeeTotal`
+- Delivery route system guide (internal) — routes and location catalogs
+- [Webhooks](/get-started/webhooks) — quotas, webhooks, billing

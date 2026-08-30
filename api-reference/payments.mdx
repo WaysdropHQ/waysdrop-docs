@@ -1,0 +1,60 @@
+---
+title: "Payments helpers"
+description: "Public checkout routing and processor currency support (no API key required)"
+---
+
+These endpoints help you build checkout UI **before** calling `POST /api/request`. They do **not** require authentication.
+
+Base URLs:
+
+- Live: `https://api.waysdrop.com`
+- Staging: `https://staging-api.waysdrop.com`
+
+## GET /payments/currency-support
+
+Check whether Waysdrop can collect in a given ISO 4217 currency and which processor would handle it.
+
+**Query**
+
+| Param      | Type   | Required | Example |
+| ---------- | ------ | -------- | ------- |
+| `currency` | string | Yes      | `NGN`   |
+
+```bash
+curl -G "https://api.waysdrop.com/payments/currency-support" \
+  --data-urlencode "currency=NGN"
+```
+
+Response indicates processor support for the currency (shape varies by deployment — use for UI hints, not as a hard guarantee before `POST /api/request`).
+
+## POST /payments/route-preview
+
+Preview which processor and charge currency would be used for a USD catalog amount and destination country.
+
+**Body**
+
+```json
+{
+    "countryIso2": "NG",
+    "amountUsd": 11.5
+}
+```
+
+```bash
+curl -X POST "https://api.waysdrop.com/payments/route-preview" \
+  -H "Content-Type: application/json" \
+  -d '{"countryIso2":"NG","amountUsd":11.5}'
+```
+
+Use this to label checkout buttons ("Pay with Nomba", expected NGN amount) before creating the delivery.
+
+## Relationship to POST /api/request
+
+Actual checkout on create uses the **collection corridor** at request time. Route preview is a hint — the authoritative charge fields are on the `POST /api/request` response when `paymentMethodType: "CHECKOUT"`.
+
+See [Money & currencies](/get-started/money-and-currencies#checkout-processor-selection).
+
+## Related
+
+- [Integration guide](/get-started/integration-guide)
+- [API module — POST /api/request](/api-reference/api)

@@ -1,0 +1,102 @@
+---
+title: "Money & currencies"
+description: "How Waysdrop stores catalog USD, native wallet balances, display overrides, and checkout processors"
+---
+
+Waysdrop uses **two independent money layers**. Treating wallet balance as USD is the most common integration bug — avoid it.
+
+## Two layers
+
+| Layer                | What it covers                                                                                  | Stored as                               | Examples                                                                |
+| -------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------- |
+| **Catalog / ledger** | Package `value`, pricing `costs.*`, delivery fees, transaction `amount`, webhook `refundAmount` | **USD** (+ FX snapshot when written)    | `"value": "3.33"`, `"costs": { "total": "4.75" }`                       |
+| **Native wallet**    | Merchant wallet balance, wallet debits/credits, checkout `charge_amount`                        | **Wallet `currencyCode`** (NGN, GHS, …) | Balance `172500.00` NGN; checkout charges customer in corridor currency |
+
+## Declaring amounts (writes)
+
+On `POST /api/package`, `POST /api/pricing`, and `POST /api/request`:
+
+- Send amounts in the currency your UI shows (`value: 5000`).
+- Add **`inputCurrency: "NGN"`** when that is not the API key owner's corridor default.
+- The server persists **USD catalog** on the row and keeps native input on `inputCurrencyCode` / `inputAmount`.
+
+```bash
+curl -X POST "https://api.waysdrop.com/api/package?currency=NGN" \
+  -H "api-key: wsp_live_…" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Meal box",
+    "quantity": 1,
+    "value": 5000,
+    "inputCurrency": "NGN",
+    "size": "SMALL"
+  }'
+```
+
+Response `data.value` remains USD catalog; `data.valueDisplay.local.currency` follows `?currency=`.
+
+## Display amounts (reads)
+
+- Pass **`?currency=NGN`** (or body `currency` on POST) for optional `*Display` fields.
+- Display overrides **do not** change checkout processor, `charge_currency`, or wallet debit currency.
+
+### `MoneyDisplay` shape
+
+Every `*Display` companion uses:
+
+```json
+{
+    "usd": 11.33,
+    "local": {
+        "currency": "NGN",
+        "amount": 17000,
+        "symbol": "₦",
+        "isStale": false
+    }
+}
+```
+
+## Checkout processor selection
+
+When `paymentMethodType: "CHECKOUT"`, processor and charge currency come from the **collection corridor** (merchant phone → delivery destination → merchant country) — **not** from `?currency=`.
+
+| Corridor                  | Processor         | Customer charged in            |
+| ------------------------- | ----------------- | ------------------------------ |
+| Nigeria                   | Paystack or Nomba | NGN                            |
+| Other supported countries | Stripe            | Local when supported, else USD |
+
+Checkout response fields:
+
+```json
+{
+    "processor": "NOMBA",
+    "charge_currency": "NGN",
+    "charge_amount": 16500,
+    "amount_usd": 11.0,
+    "authorization_url": "https://…",
+    "checkout_url": "https://…",
+    "reference": "WD-…"
+}
+```
+
+Use `authorization_url` or `checkout_url` — do not hard-code Paystack-only handling.
+
+## Merchant wallet
+
+`GET /api/wallet` returns balance in **native wallet currency** with optional `balanceDisplay`.
+
+`paymentMethodType: "WALLET"` debits the merchant wallet at create time. Preflight with `GET /api/wallet` before booking.
+
+## Exchange rates
+
+Partners use **`GET /api/exchange-rate`** and **`GET /api/convert`** with the `api-key` header. See [Exchange rates](/api-reference/exchange-rates).
+
+## Webhooks
+
+Webhook payloads include the same USD catalog fields plus automatic `*Display` companions in your corridor currency. See [Webhooks](/get-started/webhooks#money-in-webhooks).
+
+## Related
+
+- [Integration guide](/get-started/integration-guide) — end-to-end food delivery flow
+- [API reference](/api-reference/api) — all `/api/*` endpoints
+- [Payments helpers](/api-reference/payments) — public route preview & currency support
