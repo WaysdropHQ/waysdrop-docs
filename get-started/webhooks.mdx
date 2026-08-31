@@ -112,6 +112,33 @@ Money-bearing webhooks follow the [two-layer model](/get-started/money-and-curre
 
 Display fields are added server-side at delivery time — you cannot pass `?currency=` on webhooks.
 
+### payment.received
+
+Fired when a customer completes payment via **`POST /api/payments/checkout`**. The amount is credited to your merchant wallet.
+
+```json
+{
+    "event": "payment.received",
+    "data": {
+        "reference": "DEP_xxx",
+        "merchantReference": "order-48291",
+        "amount": "5000.00",
+        "amountDisplay": {
+            "usd": 3.33,
+            "local": { "currency": "NGN", "amount": 5000, "symbol": "₦" }
+        },
+        "currencyCode": "NGN",
+        "amountUsd": "3.33",
+        "status": "SUCCESS",
+        "walletChannel": "MERCHANT",
+        "customerEmail": "customer@example.com",
+        "createdAt": "2025-01-01T12:00:00.000Z"
+    }
+}
+```
+
+`merchantReference` is `null` when you did not send one on checkout create. Use `reference` (Waysdrop) for processor reconciliation.
+
 ### p2p.delivery.created
 
 ```json

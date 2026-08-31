@@ -23,13 +23,15 @@ The key must match: `^wsp_(live|staging)_[a-f0-9]{64}$`
 
 The authenticated user is the **API key owner**. Quota and billing are enforced per key.
 
+Keys with **`serverOnly: true`** (default) reject browser-originated requests. Set `serverOnly: false` on the key to allow client-side usage.
+
 ### Errors
 
-| Status | When                                                  |
-| ------ | ----------------------------------------------------- |
-| `401`  | Missing key, invalid format, or validation failed     |
-| `403`  | Key disabled / IP or origin restrictions              |
-| `429`  | Quota exceeded (`message` may include `quota` object) |
+| Status | When                                                                |
+| ------ | ------------------------------------------------------------------- |
+| `401`  | Missing key, invalid format, or validation failed                   |
+| `403`  | Key disabled, IP restrictions, or browser blocked when `serverOnly` |
+| `429`  | Quota exceeded (`message` may include `quota` object)               |
 
 ### Account requirements (delivery flows)
 
@@ -61,14 +63,14 @@ The authenticated user is the **API key owner**. Quota and billing are enforced 
 
 ```json
 {
-  "statusCode": 400,
-  "method": "POST",
-  "timestamp": "2026-05-15T12:00:00.000Z",
-  "path": "/api/request",
-  "url": "https://api.example.com/api/request",
-  "message": "Insufficient balance",
-  "details": { "error": "Unprocessable Entity", "statusCode": 422 },
-  "environment": "production"
+    "statusCode": 400,
+    "method": "POST",
+    "timestamp": "2026-05-15T12:00:00.000Z",
+    "path": "/api/request",
+    "url": "https://api.example.com/api/request",
+    "message": "Insufficient balance",
+    "details": { "error": "Unprocessable Entity", "statusCode": 422 },
+    "environment": "production"
 }
 ```
 
@@ -129,25 +131,26 @@ See [Money & currencies](/get-started/money-and-currencies).
 
 ## Endpoints overview
 
-| #   | Method   | Path                              | Purpose                                         |
-| --- | -------- | --------------------------------- | ----------------------------------------------- |
-| 1   | `GET`    | `/api/countries`                  | Country location catalog                        |
-| 2   | `GET`    | `/api/states`                     | State location catalog                          |
-| 3   | `GET`    | `/api/cities`                     | City/LGA location catalog                       |
-| 4   | `POST`   | `/api/route`                      | Resolve route distance & type                   |
-| 5   | `GET`    | `/api/fleet-types`                | List active fleet types                         |
-| 6   | `POST`   | `/api/pricing`                    | Estimate delivery cost                          |
-| 7   | `POST`   | `/api/package`                    | Create or edit a package                        |
-| 8   | `DELETE` | `/api/package/:packageId`         | Delete an unassigned package                    |
-| 9   | `GET`    | `/api/packages`                   | List unassigned packages                        |
-| 10  | `POST`   | `/api/request`                    | Create P2P delivery (wallet or hosted checkout) |
-| 11  | `POST`   | `/api/request/:deliveryId/cancel` | Cancel eligible delivery                        |
-| 12  | `GET`    | `/api/deliveries`                 | List deliveries for the current API key         |
-| 13  | `GET`    | `/api/deliveries/:deliveryId`     | Get delivery details & tracking                 |
-| 14  | `GET`    | `/api/wallet`                     | Merchant wallet balance (native currency)       |
-| 15  | `GET`    | `/api/account`                    | Corridor currency & store profile summary       |
-| 16  | `GET`    | `/api/exchange-rate`              | FX rate between two ISO 4217 codes              |
-| 17  | `GET`    | `/api/convert`                    | Convert amount between two currencies           |
+| #   | Method   | Path                              | Purpose                                             |
+| --- | -------- | --------------------------------- | --------------------------------------------------- |
+| 1   | `GET`    | `/api/countries`                  | Country location catalog                            |
+| 2   | `GET`    | `/api/states`                     | State location catalog                              |
+| 3   | `GET`    | `/api/cities`                     | City/LGA location catalog                           |
+| 4   | `POST`   | `/api/route`                      | Resolve route distance & type                       |
+| 5   | `GET`    | `/api/fleet-types`                | List active fleet types                             |
+| 6   | `POST`   | `/api/pricing`                    | Estimate delivery cost                              |
+| 7   | `POST`   | `/api/package`                    | Create or edit a package                            |
+| 8   | `DELETE` | `/api/package/:packageId`         | Delete an unassigned package                        |
+| 9   | `GET`    | `/api/packages`                   | List unassigned packages                            |
+| 10  | `POST`   | `/api/request`                    | Create P2P delivery (wallet or hosted checkout)     |
+| 11  | `POST`   | `/api/request/:deliveryId/cancel` | Cancel eligible delivery                            |
+| 12  | `GET`    | `/api/deliveries`                 | List deliveries for the current API key             |
+| 13  | `GET`    | `/api/deliveries/:deliveryId`     | Get delivery details & tracking                     |
+| 14  | `GET`    | `/api/wallet`                     | Merchant wallet balance (native currency)           |
+| 15  | `POST`   | `/api/payments/checkout`          | Collect payment from a customer via hosted checkout |
+| 16  | `GET`    | `/api/account`                    | Corridor currency & store profile summary           |
+| 17  | `GET`    | `/api/exchange-rate`              | FX rate between two ISO 4217 codes                  |
+| 18  | `GET`    | `/api/convert`                    | Convert amount between two currencies               |
 
 ---
 
@@ -169,20 +172,20 @@ See [Money & currencies](/get-started/money-and-currencies).
 
 ```json
 {
-  "success": true,
-  "message": "Countries fetched successfully",
-  "data": [
-    {
-      "value": "NG",
-      "name": "Nigeria",
-      "type": "INTER_COUNTRY",
-      "country": "Nigeria",
-      "countryCode": "NG",
-      "countryCodeAlpha3": "NGA",
-      "continentCode": "AF",
-      "continentName": "Africa"
-    }
-  ]
+    "success": true,
+    "message": "Countries fetched successfully",
+    "data": [
+        {
+            "value": "NG",
+            "name": "Nigeria",
+            "type": "INTER_COUNTRY",
+            "country": "Nigeria",
+            "countryCode": "NG",
+            "countryCodeAlpha3": "NGA",
+            "continentCode": "AF",
+            "continentName": "Africa"
+        }
+    ]
 }
 ```
 
@@ -206,20 +209,20 @@ See [Money & currencies](/get-started/money-and-currencies).
 
 ```json
 {
-  "success": true,
-  "message": "States fetched successfully",
-  "data": [
-    {
-      "value": "ng-admin1-lagos",
-      "name": "Lagos",
-      "type": "INTER_STATE",
-      "state": "Lagos",
-      "country": "Nigeria",
-      "countryCode": "NG",
-      "admin1Id": "ng-admin1-lagos",
-      "admin1Name": "Lagos"
-    }
-  ]
+    "success": true,
+    "message": "States fetched successfully",
+    "data": [
+        {
+            "value": "ng-admin1-lagos",
+            "name": "Lagos",
+            "type": "INTER_STATE",
+            "state": "Lagos",
+            "country": "Nigeria",
+            "countryCode": "NG",
+            "admin1Id": "ng-admin1-lagos",
+            "admin1Name": "Lagos"
+        }
+    ]
 }
 ```
 
@@ -243,21 +246,21 @@ See [Money & currencies](/get-started/money-and-currencies).
 
 ```json
 {
-  "success": true,
-  "message": "Cities fetched successfully",
-  "data": [
-    {
-      "locationId": "ng-lagos-ikeja",
-      "value": "ChIJxxxxxxxx",
-      "country": "Nigeria",
-      "countryCode": "NG",
-      "lat": 6.6018,
-      "lon": 3.3515,
-      "lgaOrCity": "Ikeja",
-      "state": "Lagos",
-      "adminUnitName": "Ikeja"
-    }
-  ]
+    "success": true,
+    "message": "Cities fetched successfully",
+    "data": [
+        {
+            "locationId": "ng-lagos-ikeja",
+            "value": "ChIJxxxxxxxx",
+            "country": "Nigeria",
+            "countryCode": "NG",
+            "lat": 6.6018,
+            "lon": 3.3515,
+            "lgaOrCity": "Ikeja",
+            "state": "Lagos",
+            "adminUnitName": "Ikeja"
+        }
+    ]
 }
 ```
 
@@ -278,8 +281,8 @@ Resolves geocoded origin/destination, driving distance, ETA, and route type.
 
 ```json
 {
-  "origin": "Ladipo Kuku Street, Ikeja Lagos",
-  "destination": "Adewole Estate, Surulere Lagos"
+    "origin": "Ladipo Kuku Street, Ikeja Lagos",
+    "destination": "Adewole Estate, Surulere Lagos"
 }
 ```
 
@@ -297,35 +300,35 @@ Resolves geocoded origin/destination, driving distance, ETA, and route type.
 
 ```json
 {
-  "success": true,
-  "message": "Route data fetched successfully",
-  "data": {
-    "distance": {
-      "distanceKm": 18.4,
-      "etaSeconds": 2400
-    },
-    "routeType": "INTER_CITY",
-    "origin": {
-      "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
-      "lgaOrCity": "Ikeja",
-      "state": "Lagos",
-      "country": "Nigeria",
-      "countryCode": "NG",
-      "lat": 6.6018,
-      "lon": 3.3515,
-      "googlePlaceId": "ChIJorigin"
-    },
-    "destination": {
-      "addressLine1": "Adewole Estate, Surulere Lagos",
-      "lgaOrCity": "Surulere",
-      "state": "Lagos",
-      "country": "Nigeria",
-      "countryCode": "NG",
-      "lat": 6.4969,
-      "lon": 3.3539,
-      "googlePlaceId": "ChIJdest"
+    "success": true,
+    "message": "Route data fetched successfully",
+    "data": {
+        "distance": {
+            "distanceKm": 18.4,
+            "etaSeconds": 2400
+        },
+        "routeType": "INTER_CITY",
+        "origin": {
+            "addressLine1": "Ladipo Kuku Street, Ikeja Lagos",
+            "lgaOrCity": "Ikeja",
+            "state": "Lagos",
+            "country": "Nigeria",
+            "countryCode": "NG",
+            "lat": 6.6018,
+            "lon": 3.3515,
+            "googlePlaceId": "ChIJorigin"
+        },
+        "destination": {
+            "addressLine1": "Adewole Estate, Surulere Lagos",
+            "lgaOrCity": "Surulere",
+            "state": "Lagos",
+            "country": "Nigeria",
+            "countryCode": "NG",
+            "lat": 6.4969,
+            "lon": 3.3539,
+            "googlePlaceId": "ChIJdest"
+        }
     }
-  }
 }
 ```
 
@@ -352,22 +355,22 @@ No query or body parameters.
 
 ```json
 {
-  "success": true,
-  "message": "Fleet types fetched successfully",
-  "data": [
-    {
-      "id": "fleet-uuid-1",
-      "name": "Bike",
-      "icon": "https://cdn.waysdrop.com/icons/bike.svg",
-      "description": "Light parcels"
-    },
-    {
-      "id": "fleet-uuid-2",
-      "name": "Van",
-      "icon": "https://cdn.waysdrop.com/icons/van.svg",
-      "description": "Medium to large parcels"
-    }
-  ]
+    "success": true,
+    "message": "Fleet types fetched successfully",
+    "data": [
+        {
+            "id": "fleet-uuid-1",
+            "name": "Bike",
+            "icon": "https://cdn.waysdrop.com/icons/bike.svg",
+            "description": "Light parcels"
+        },
+        {
+            "id": "fleet-uuid-2",
+            "name": "Van",
+            "icon": "https://cdn.waysdrop.com/icons/van.svg",
+            "description": "Medium to large parcels"
+        }
+    ]
 }
 ```
 
@@ -400,12 +403,12 @@ Extends route fields with shipment details:
 
 ```json
 {
-  "origin": "Ladipo Kuku Street, Ikeja Lagos",
-  "destination": "Adewole Estate, Surulere Lagos",
-  "totalWeight": 5,
-  "totalValue": 25000,
-  "urgencyType": "STANDARD",
-  "fleetTypeId": "fleet-uuid-1"
+    "origin": "Ladipo Kuku Street, Ikeja Lagos",
+    "destination": "Adewole Estate, Surulere Lagos",
+    "totalWeight": 5,
+    "totalValue": 25000,
+    "urgencyType": "STANDARD",
+    "fleetTypeId": "fleet-uuid-1"
 }
 ```
 
@@ -413,12 +416,12 @@ Extends route fields with shipment details:
 
 ```json
 {
-  "origin": "Ikeja, Lagos",
-  "destination": "Lekki, Lagos",
-  "totalWeight": 3,
-  "totalValue": 10000,
-  "urgencyType": "SCHEDULED",
-  "slot": "10:00 - 13:00"
+    "origin": "Ikeja, Lagos",
+    "destination": "Lekki, Lagos",
+    "totalWeight": 3,
+    "totalValue": 10000,
+    "urgencyType": "SCHEDULED",
+    "slot": "10:00 - 13:00"
 }
 ```
 
@@ -443,31 +446,31 @@ Extends route fields with shipment details:
 
 ```json
 {
-  "success": true,
-  "message": "Pricing fetched successfully",
-  "data": {
-    "distance": { "distanceKm": 18.4, "etaSeconds": 2400 },
-    "routeType": "INTER_CITY",
-    "costs": {
-      "base": "3200",
-      "weight": "500",
-      "fleet": "800",
-      "insurance": "0",
-      "surcharge": "0",
-      "serviceFee": "250",
-      "deliverySubtotal": "4500",
-      "total": "4750"
-    },
-    "breakdown": {
-      "baseCharge": "Base distance charge for 18.40km",
-      "weightCharge": "Additional charge for 5kg",
-      "insuranceCharge": null,
-      "fleetCharge": "Fleet charge for Bike delivery",
-      "surchargeCharge": null,
-      "serviceFeeCharge": "Platform service fee"
-    },
-    "courierPricingRule": null
-  }
+    "success": true,
+    "message": "Pricing fetched successfully",
+    "data": {
+        "distance": { "distanceKm": 18.4, "etaSeconds": 2400 },
+        "routeType": "INTER_CITY",
+        "costs": {
+            "base": "3200",
+            "weight": "500",
+            "fleet": "800",
+            "insurance": "0",
+            "surcharge": "0",
+            "serviceFee": "250",
+            "deliverySubtotal": "4500",
+            "total": "4750"
+        },
+        "breakdown": {
+            "baseCharge": "Base distance charge for 18.40km",
+            "weightCharge": "Additional charge for 5kg",
+            "insuranceCharge": null,
+            "fleetCharge": "Fleet charge for Bike delivery",
+            "surchargeCharge": null,
+            "serviceFeeCharge": "Platform service fee"
+        },
+        "courierPricingRule": null
+    }
 }
 ```
 
@@ -501,13 +504,13 @@ Extends route fields with shipment details:
 
 ```json
 {
-  "name": "Electronics box",
-  "quantity": 1,
-  "value": 50000,
-  "size": "MEDIUM",
-  "packageType": "Electronics",
-  "description": "Fragile",
-  "image": "https://cdn.waysdrop.com/uploads/pkg.jpg"
+    "name": "Electronics box",
+    "quantity": 1,
+    "value": 50000,
+    "size": "MEDIUM",
+    "packageType": "Electronics",
+    "description": "Fragile",
+    "image": "https://cdn.waysdrop.com/uploads/pkg.jpg"
 }
 ```
 
@@ -520,9 +523,9 @@ Extends route fields with shipment details:
 
 ```json
 {
-  "packageId": "pkg-uuid-here",
-  "value": 55000,
-  "description": "Updated note"
+    "packageId": "pkg-uuid-here",
+    "value": 55000,
+    "description": "Updated note"
 }
 ```
 
@@ -536,25 +539,25 @@ Cannot edit a package already linked to a delivery (`400`).
 
 ```json
 {
-  "success": true,
-  "message": "Package saved successfully",
-  "data": {
-    "id": "pkg-uuid-1",
-    "name": "Electronics box",
-    "packageType": "Electronics",
-    "image": "https://cdn.waysdrop.com/uploads/pkg.jpg",
-    "description": "Fragile",
-    "quantity": 1,
-    "weight": "7",
-    "value": "50000",
-    "size": "MEDIUM",
-    "type": "PACKAGE_ITEM",
-    "p2pDeliveryId": null,
-    "userId": "user-uuid",
-    "createdAt": "2026-05-15T10:00:00.000Z",
-    "updatedAt": "2026-05-15T10:00:00.000Z",
-    "deletedAt": null
-  }
+    "success": true,
+    "message": "Package saved successfully",
+    "data": {
+        "id": "pkg-uuid-1",
+        "name": "Electronics box",
+        "packageType": "Electronics",
+        "image": "https://cdn.waysdrop.com/uploads/pkg.jpg",
+        "description": "Fragile",
+        "quantity": 1,
+        "weight": "7",
+        "value": "50000",
+        "size": "MEDIUM",
+        "type": "PACKAGE_ITEM",
+        "p2pDeliveryId": null,
+        "userId": "user-uuid",
+        "createdAt": "2026-05-15T10:00:00.000Z",
+        "updatedAt": "2026-05-15T10:00:00.000Z",
+        "deletedAt": null
+    }
 }
 ```
 
@@ -599,19 +602,19 @@ Optional query: `?currency=NGN` (or any supported ISO 4217 code) to override `va
 
 ```json
 {
-  "success": true,
-  "message": "Packages retrieved successfully",
-  "data": [
-    {
-      "id": "pkg-uuid-1",
-      "name": "Electronics box",
-      "weight": "7",
-      "value": "50000",
-      "size": "MEDIUM",
-      "quantity": 1,
-      "p2pDeliveryId": null
-    }
-  ]
+    "success": true,
+    "message": "Packages retrieved successfully",
+    "data": [
+        {
+            "id": "pkg-uuid-1",
+            "name": "Electronics box",
+            "weight": "7",
+            "value": "50000",
+            "size": "MEDIUM",
+            "quantity": 1,
+            "p2pDeliveryId": null
+        }
+    ]
 }
 ```
 
@@ -619,9 +622,9 @@ Optional query: `?currency=NGN` (or any supported ISO 4217 code) to override `va
 
 ```json
 {
-  "success": true,
-  "message": "Packages retrieved successfully",
-  "data": []
+    "success": true,
+    "message": "Packages retrieved successfully",
+    "data": []
 }
 ```
 
@@ -637,34 +640,35 @@ Optional query: `?currency=NGN` — display-only override for `*Display` fields 
 
 ### Request body
 
-| Field                        | Type        | Required       | Description                                                               |
-| ---------------------------- | ----------- | -------------- | ------------------------------------------------------------------------- |
-| `origin`                     | string      | Yes            | Pickup address (max 255)                                                  |
-| `destination`                | string      | Yes            | Drop-off address (max 255)                                                |
-| `packagesId`                 | UUID[]      | Yes            | Unassigned package IDs (must all belong to user)                          |
-| `type`                       | enum        | Yes            | `PICKUP` or `DROP_OFF`                                                    |
-| `courierSelection`           | enum        | Yes            | `ANYONE`, `SPECIFIC`, `MERCHANT_SPECIAL_COURIERS`                         |
-| `courierId`                  | UUID        | If `SPECIFIC`  | Courier profile ID                                                        |
-| `destinationContactName`     | string      | Yes            | Recipient name                                                            |
-| `destinationContactEmail`    | string      | Yes            | Recipient email                                                           |
-| `destinationContactPhone`    | string      | Yes            | E.164 phone                                                               |
-| `originContactName`          | string      | No             | Defaults to API user fullname                                             |
-| `originContactEmail`         | string      | No             | Defaults to API user email                                                |
-| `originContactPhone`         | string      | No             | Defaults to API user phone                                                |
-| `note`                       | string      | No             | Delivery notes (max 128)                                                  |
-| `urgencyType`                | enum        | No             | `PRIORITY`, `STANDARD`, `SCHEDULED`                                       |
-| `deliveryDate`               | date string | If `SCHEDULED` | e.g. `"2025-06-01"`                                                       |
-| `deliverySlot`               | string      | If `SCHEDULED` | Valid slot for date                                                       |
-| `fleetTypeId`                | UUID        | No             | Auto-selected best-fit fleet if omitted                                   |
-| `deliveryFeePayer`           | enum        | No             | `CREATOR` (default), `RECIPIENT`, `SPLIT`                                 |
-| `paymentMethodType`          | enum        | No             | `WALLET` (default) or `CHECKOUT`                                          |
-| `payPackageValue`            | boolean     | No             | Charge declared package value upfront with creator share                  |
-| `payOnDelivery`              | boolean     | No             | Collect package value at door (mutually exclusive with `payPackageValue`) |
-| `podRemitTo`                 | enum        | If POD         | `MY_WALLET` or `COURIER_WALLET`                                           |
-| `currency`                   | string      | No (body)      | Display-only override (same as `?currency=`)                              |
-| `requireCollectionProofCode` | boolean     | No             | Default `true`                                                            |
-| `requireDeliveryProofCode`   | boolean     | No             | Default `true`                                                            |
-| `link3rdPartyByContactInfo`  | boolean     | No             | Default `false`                                                           |
+| Field                        | Type        | Required       | Description                                                                        |
+| ---------------------------- | ----------- | -------------- | ---------------------------------------------------------------------------------- |
+| `origin`                     | string      | Yes            | Pickup address (max 255)                                                           |
+| `destination`                | string      | Yes            | Drop-off address (max 255)                                                         |
+| `packagesId`                 | UUID[]      | Yes            | Unassigned package IDs (must all belong to user)                                   |
+| `type`                       | enum        | Yes            | `PICKUP` or `DROP_OFF`                                                             |
+| `courierSelection`           | enum        | Yes            | `ANYONE`, `SPECIFIC`, `MERCHANT_SPECIAL_COURIERS`                                  |
+| `courierId`                  | UUID        | If `SPECIFIC`  | Courier profile ID                                                                 |
+| `destinationContactName`     | string      | Yes            | Recipient name                                                                     |
+| `destinationContactEmail`    | string      | Yes            | Recipient email                                                                    |
+| `destinationContactPhone`    | string      | Yes            | E.164 phone                                                                        |
+| `originContactName`          | string      | No             | Defaults to API user fullname                                                      |
+| `originContactEmail`         | string      | No             | Defaults to API user email                                                         |
+| `originContactPhone`         | string      | No             | Defaults to API user phone                                                         |
+| `note`                       | string      | No             | Delivery notes (max 128)                                                           |
+| `urgencyType`                | enum        | No             | `PRIORITY`, `STANDARD`, `SCHEDULED`                                                |
+| `deliveryDate`               | date string | If `SCHEDULED` | e.g. `"2025-06-01"`                                                                |
+| `deliverySlot`               | string      | If `SCHEDULED` | Valid slot for date                                                                |
+| `fleetTypeId`                | UUID        | No             | Auto-selected best-fit fleet if omitted                                            |
+| `deliveryFeePayer`           | enum        | No             | `CREATOR` (default), `RECIPIENT`, `SPLIT`                                          |
+| `paymentMethodType`          | enum        | No             | `WALLET` (default) or `CHECKOUT`                                                   |
+| `callbackUrl`                | string      | No             | Post-payment redirect when using `CHECKOUT` (allowed origin; server appends `ref`) |
+| `payPackageValue`            | boolean     | No             | Charge declared package value upfront with creator share                           |
+| `payOnDelivery`              | boolean     | No             | Collect package value at door (mutually exclusive with `payPackageValue`)          |
+| `podRemitTo`                 | enum        | If POD         | `MY_WALLET` or `COURIER_WALLET`                                                    |
+| `currency`                   | string      | No (body)      | Display-only override (same as `?currency=`)                                       |
+| `requireCollectionProofCode` | boolean     | No             | Default `true`                                                                     |
+| `requireDeliveryProofCode`   | boolean     | No             | Default `true`                                                                     |
+| `link3rdPartyByContactInfo`  | boolean     | No             | Default `false`                                                                    |
 
 **Courier selection notes:**
 
@@ -675,10 +679,10 @@ Optional query: `?currency=NGN` — display-only override for `*Display` fields 
 
 **Payment:**
 
-| `paymentMethodType` | Behaviour                                                                                                                                                                            |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `WALLET` (default)  | Debits **merchant wallet** in native wallet currency when you owe an upfront creator share. `422` if insufficient balance.                                                           |
-| `CHECKOUT`          | Returns hosted checkout fields when you owe an upfront share. Redirect using `authorization_url` or `checkout_url`. Matching for paid flows starts after payment confirms (webhook). |
+| `paymentMethodType` | Behaviour                                                                                                                                                                                                                                                                                                |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WALLET` (default)  | Debits **merchant wallet** in native wallet currency when you owe an upfront creator share. `422` if insufficient balance.                                                                                                                                                                               |
+| `CHECKOUT`          | Returns hosted checkout fields when you owe an upfront share. Redirect using `authorization_url` or `checkout_url`. Optional `callbackUrl` controls the post-payment redirect (allowed origins only; server appends `ref=<reference>`). Matching for paid flows starts after payment confirms (webhook). |
 
 When `deliveryFeePayer` is `RECIPIENT` or `SPLIT`, the customer may receive their own checkout link (`deliveryFee.recipient.checkoutUrl`). Courier matching starts only when `matchingEligible: true`.
 
@@ -688,18 +692,18 @@ Full flag matrix: [PARTNER_API_INTEGRATION.md](./partner/PARTNER_API_INTEGRATION
 
 ```json
 {
-  "origin": "12 Allen Avenue, Ikeja, Lagos",
-  "destination": "45 Admiralty Way, Lekki, Lagos",
-  "packagesId": ["pkg-uuid-1", "pkg-uuid-2"],
-  "type": "PICKUP",
-  "courierSelection": "ANYONE",
-  "destinationContactName": "Jane Recipient",
-  "destinationContactEmail": "jane@example.com",
-  "destinationContactPhone": "+2348012345678",
-  "note": "Call on arrival",
-  "urgencyType": "STANDARD",
-  "requireCollectionProofCode": true,
-  "requireDeliveryProofCode": true
+    "origin": "12 Allen Avenue, Ikeja, Lagos",
+    "destination": "45 Admiralty Way, Lekki, Lagos",
+    "packagesId": ["pkg-uuid-1", "pkg-uuid-2"],
+    "type": "PICKUP",
+    "courierSelection": "ANYONE",
+    "destinationContactName": "Jane Recipient",
+    "destinationContactEmail": "jane@example.com",
+    "destinationContactPhone": "+2348012345678",
+    "note": "Call on arrival",
+    "urgencyType": "STANDARD",
+    "requireCollectionProofCode": true,
+    "requireDeliveryProofCode": true
 }
 ```
 
@@ -707,15 +711,15 @@ Full flag matrix: [PARTNER_API_INTEGRATION.md](./partner/PARTNER_API_INTEGRATION
 
 ```json
 {
-  "origin": "12 Allen Avenue, Ikeja, Lagos",
-  "destination": "45 Admiralty Way, Lekki, Lagos",
-  "packagesId": ["pkg-uuid-1"],
-  "type": "DROP_OFF",
-  "courierSelection": "SPECIFIC",
-  "courierId": "787db687-d0d9-425a-955e-aa52d6572da9",
-  "destinationContactName": "Jane Recipient",
-  "destinationContactEmail": "jane@example.com",
-  "destinationContactPhone": "+2348012345678"
+    "origin": "12 Allen Avenue, Ikeja, Lagos",
+    "destination": "45 Admiralty Way, Lekki, Lagos",
+    "packagesId": ["pkg-uuid-1"],
+    "type": "DROP_OFF",
+    "courierSelection": "SPECIFIC",
+    "courierId": "787db687-d0d9-425a-955e-aa52d6572da9",
+    "destinationContactName": "Jane Recipient",
+    "destinationContactEmail": "jane@example.com",
+    "destinationContactPhone": "+2348012345678"
 }
 ```
 
@@ -723,17 +727,17 @@ Full flag matrix: [PARTNER_API_INTEGRATION.md](./partner/PARTNER_API_INTEGRATION
 
 ```json
 {
-  "origin": "Ikeja, Lagos",
-  "destination": "Abuja, FCT",
-  "packagesId": ["pkg-uuid-1"],
-  "type": "PICKUP",
-  "courierSelection": "ANYONE",
-  "urgencyType": "SCHEDULED",
-  "deliveryDate": "2026-06-01",
-  "deliverySlot": "10:00 - 13:00",
-  "destinationContactName": "Jane Recipient",
-  "destinationContactEmail": "jane@example.com",
-  "destinationContactPhone": "+2348012345678"
+    "origin": "Ikeja, Lagos",
+    "destination": "Abuja, FCT",
+    "packagesId": ["pkg-uuid-1"],
+    "type": "PICKUP",
+    "courierSelection": "ANYONE",
+    "urgencyType": "SCHEDULED",
+    "deliveryDate": "2026-06-01",
+    "deliverySlot": "10:00 - 13:00",
+    "destinationContactName": "Jane Recipient",
+    "destinationContactEmail": "jane@example.com",
+    "destinationContactPhone": "+2348012345678"
 }
 ```
 
@@ -774,45 +778,45 @@ Nested `p2pDelivery`:
 
 ```json
 {
-  "success": true,
-  "message": "Delivery request created successfully",
-  "data": {
-    "id": "p2p-uuid",
-    "type": "PICKUP",
-    "status": "PENDING",
-    "totalWeight": "14",
-    "totalValue": "100000",
-    "userId": "user-uuid",
-    "profileId": "personal-profile-uuid",
-    "deliveryId": "delivery-uuid",
-    "delivery": {
-      "id": "delivery-uuid",
-      "trackingId": "P2P-ABC123",
-      "status": "REQUEST_CREATED",
-      "type": "P2P",
-      "routeType": "INTER_CITY",
-      "deliveryFee": "4750",
-      "distanceKm": 18.4,
-      "etaSeconds": 2400,
-      "courierMatching": "ANYONE",
-      "origin": {
-        "id": "addr-origin-uuid",
-        "addressLine1": "12 Allen Avenue, Ikeja, Lagos",
-        "lgaOrCity": "Ikeja",
-        "state": "Lagos",
-        "lat": 6.6018,
-        "lon": 3.3515
-      },
-      "destination": {
-        "id": "addr-dest-uuid",
-        "addressLine1": "45 Admiralty Way, Lekki, Lagos",
-        "lgaOrCity": "Lekki",
-        "state": "Lagos",
-        "lat": 6.4474,
-        "lon": 3.47
-      }
+    "success": true,
+    "message": "Delivery request created successfully",
+    "data": {
+        "id": "p2p-uuid",
+        "type": "PICKUP",
+        "status": "PENDING",
+        "totalWeight": "14",
+        "totalValue": "100000",
+        "userId": "user-uuid",
+        "profileId": "personal-profile-uuid",
+        "deliveryId": "delivery-uuid",
+        "delivery": {
+            "id": "delivery-uuid",
+            "trackingId": "P2P-ABC123",
+            "status": "REQUEST_CREATED",
+            "type": "P2P",
+            "routeType": "INTER_CITY",
+            "deliveryFee": "4750",
+            "distanceKm": 18.4,
+            "etaSeconds": 2400,
+            "courierMatching": "ANYONE",
+            "origin": {
+                "id": "addr-origin-uuid",
+                "addressLine1": "12 Allen Avenue, Ikeja, Lagos",
+                "lgaOrCity": "Ikeja",
+                "state": "Lagos",
+                "lat": 6.6018,
+                "lon": 3.3515
+            },
+            "destination": {
+                "id": "addr-dest-uuid",
+                "addressLine1": "45 Admiralty Way, Lekki, Lagos",
+                "lgaOrCity": "Lekki",
+                "state": "Lagos",
+                "lat": 6.4474,
+                "lon": 3.47
+            }
+        }
     }
-  }
 }
 ```
 
@@ -844,13 +848,13 @@ Nested `p2pDelivery`:
 
 ```json
 {
-  "success": true,
-  "message": "Delivery request has been canceled",
-  "data": {
-    "delivery": {
-      "id": "delivery-uuid"
+    "success": true,
+    "message": "Delivery request has been canceled",
+    "data": {
+        "delivery": {
+            "id": "delivery-uuid"
+        }
     }
-  }
 }
 ```
 
@@ -918,47 +922,51 @@ Must belong to the API key owner.
 
 ```json
 {
-  "success": true,
-  "message": "Delivery retrieved successfully",
-  "data": {
-    "id": "delivery-uuid",
-    "trackingId": "P2P-ABC123",
-    "status": "ASSIGNING",
-    "type": "P2P",
-    "routeType": "INTER_CITY",
-    "deliveryFee": "4750",
-    "distanceKm": 18.4,
-    "etaSeconds": 2400,
-    "origin": {
-      "lgaOrCity": "Ikeja",
-      "state": "Lagos",
-      "lat": 6.6018,
-      "lon": 3.3515
-    },
-    "destination": {
-      "lgaOrCity": "Lekki",
-      "state": "Lagos",
-      "lat": 6.4474,
-      "lon": 3.47
-    },
-    "deliverySteps": [
-      {
-        "id": "step-1",
-        "step": "REQUEST_CREATED",
-        "active": false,
-        "updatedAt": "..."
-      },
-      {
-        "id": "step-2",
-        "step": "ASSIGNING",
-        "active": true,
-        "updatedAt": "..."
-      }
-    ],
-    "proofs": [],
-    "fleetType": { "id": "fleet-uuid-1", "name": "Bike", "icon": "..." },
-    "p2pDelivery": { "id": "p2p-uuid", "status": "PENDING", "type": "PICKUP" }
-  }
+    "success": true,
+    "message": "Delivery retrieved successfully",
+    "data": {
+        "id": "delivery-uuid",
+        "trackingId": "P2P-ABC123",
+        "status": "ASSIGNING",
+        "type": "P2P",
+        "routeType": "INTER_CITY",
+        "deliveryFee": "4750",
+        "distanceKm": 18.4,
+        "etaSeconds": 2400,
+        "origin": {
+            "lgaOrCity": "Ikeja",
+            "state": "Lagos",
+            "lat": 6.6018,
+            "lon": 3.3515
+        },
+        "destination": {
+            "lgaOrCity": "Lekki",
+            "state": "Lagos",
+            "lat": 6.4474,
+            "lon": 3.47
+        },
+        "deliverySteps": [
+            {
+                "id": "step-1",
+                "step": "REQUEST_CREATED",
+                "active": false,
+                "updatedAt": "..."
+            },
+            {
+                "id": "step-2",
+                "step": "ASSIGNING",
+                "active": true,
+                "updatedAt": "..."
+            }
+        ],
+        "proofs": [],
+        "fleetType": { "id": "fleet-uuid-1", "name": "Bike", "icon": "..." },
+        "p2pDelivery": {
+            "id": "p2p-uuid",
+            "status": "PENDING",
+            "type": "PICKUP"
+        }
+    }
 }
 ```
 
@@ -966,42 +974,42 @@ Must belong to the API key owner.
 
 ```json
 {
-  "success": true,
-  "message": "Delivery retrieved successfully",
-  "data": {
-    "id": "delivery-uuid",
-    "trackingId": "P2P-ABC123",
-    "status": "IN_TRANSIT",
-    "courier": {
-      "name": "Ada Courier",
-      "phone": "+2348012345678",
-      "profilePhoto": "https://cdn.waysdrop.com/photos/courier.jpg",
-      "fleet": {
-        "regNo": "ABC-123XY",
-        "make": "Honda",
-        "model": "CB125",
-        "colour": "Red",
-        "typeId": "fleet-uuid-1"
-      },
-      "currentLocation": {
-        "lat": 6.52,
-        "lon": 3.38,
-        "lgaOrCity": "Victoria Island"
-      },
-      "eta": {
-        "from": "2026-05-15T14:10:00.000Z",
-        "to": "2026-05-15T14:35:00.000Z"
-      }
-    },
-    "proofs": [
-      {
-        "id": "proof-uuid",
-        "type": "COLLECTION",
-        "code": null,
-        "scannedAt": null
-      }
-    ]
-  }
+    "success": true,
+    "message": "Delivery retrieved successfully",
+    "data": {
+        "id": "delivery-uuid",
+        "trackingId": "P2P-ABC123",
+        "status": "IN_TRANSIT",
+        "courier": {
+            "name": "Ada Courier",
+            "phone": "+2348012345678",
+            "profilePhoto": "https://cdn.waysdrop.com/photos/courier.jpg",
+            "fleet": {
+                "regNo": "ABC-123XY",
+                "make": "Honda",
+                "model": "CB125",
+                "colour": "Red",
+                "typeId": "fleet-uuid-1"
+            },
+            "currentLocation": {
+                "lat": 6.52,
+                "lon": 3.38,
+                "lgaOrCity": "Victoria Island"
+            },
+            "eta": {
+                "from": "2026-05-15T14:10:00.000Z",
+                "to": "2026-05-15T14:35:00.000Z"
+            }
+        },
+        "proofs": [
+            {
+                "id": "proof-uuid",
+                "type": "COLLECTION",
+                "code": null,
+                "scannedAt": null
+            }
+        ]
+    }
 }
 ```
 
@@ -1053,42 +1061,49 @@ Returns deliveries created with the **current API key** (`delivery.apiKeyId`), n
 
 ### Query params
 
-| Param      | Type   | Required | Description                                              |
-| ---------- | ------ | -------- | -------------------------------------------------------- |
-| `page`     | number | No       | Default `1`                                              |
-| `limit`    | number | No       | Default `20`, max `100`                                  |
-| `search`   | string | No       | Filter by `trackingId` (case-insensitive contains)       |
-| `status`   | enum   | No       | `DeliveryStatus` filter                                  |
+| Param      | Type   | Required | Description                                             |
+| ---------- | ------ | -------- | ------------------------------------------------------- |
+| `page`     | number | No       | Default `1`                                             |
+| `limit`    | number | No       | Default `20`, max `100`                                 |
+| `search`   | string | No       | Filter by `trackingId` (case-insensitive contains)      |
+| `status`   | enum   | No       | `DeliveryStatus` filter                                 |
 | `currency` | string | No       | Display-only override for `*Display` fields on each row |
 
 ### Success — `200 OK`
 
 ```json
 {
-  "success": true,
-  "message": "Deliveries retrieved successfully",
-  "data": {
-    "data": [
-      {
-        "id": "uuid",
-        "trackingId": "P2P-…",
-        "status": "IN_TRANSIT",
-        "type": "P2P",
-        "deliveryFee": "4.75",
-        "deliveryFeeDisplay": {
-          "usd": 4.75,
-          "local": { "currency": "NGN", "amount": 7125, "symbol": "₦" }
-        },
-        "p2pDelivery": {
-          "id": "uuid",
-          "totalValue": "100.00",
-          "totalValueDisplay": { "usd": 100, "local": { "currency": "NGN", "amount": 150000 } }
-        },
-        "createdAt": "2026-08-06T16:00:00.000Z"
-      }
-    ],
-    "meta": { "total": 42, "page": 1, "limit": 20, "totalPages": 3 }
-  }
+    "success": true,
+    "message": "Deliveries retrieved successfully",
+    "data": {
+        "data": [
+            {
+                "id": "uuid",
+                "trackingId": "P2P-…",
+                "status": "IN_TRANSIT",
+                "type": "P2P",
+                "deliveryFee": "4.75",
+                "deliveryFeeDisplay": {
+                    "usd": 4.75,
+                    "local": {
+                        "currency": "NGN",
+                        "amount": 7125,
+                        "symbol": "₦"
+                    }
+                },
+                "p2pDelivery": {
+                    "id": "uuid",
+                    "totalValue": "100.00",
+                    "totalValueDisplay": {
+                        "usd": 100,
+                        "local": { "currency": "NGN", "amount": 150000 }
+                    }
+                },
+                "createdAt": "2026-08-06T16:00:00.000Z"
+            }
+        ],
+        "meta": { "total": 42, "page": 1, "limit": 20, "totalPages": 3 }
+    }
 }
 ```
 
@@ -1106,23 +1121,75 @@ Optional query: `?currency=NGN` — display-only override for `balanceDisplay`.
 
 ```json
 {
-  "success": true,
-  "message": "Merchant wallet retrieved successfully",
-  "data": {
-    "id": "uuid",
-    "currencyCode": "NGN",
-    "balance": "172500.00",
-    "balanceDisplay": {
-      "usd": 115,
-      "local": { "currency": "NGN", "amount": 172500, "symbol": "₦" }
+    "success": true,
+    "message": "Merchant wallet retrieved successfully",
+    "data": {
+        "id": "uuid",
+        "currencyCode": "NGN",
+        "balance": "172500.00",
+        "balanceDisplay": {
+            "usd": 115,
+            "local": { "currency": "NGN", "amount": 172500, "symbol": "₦" }
+        }
     }
-  }
 }
 ```
 
 ---
 
-## 15. Get account summary
+## 15. Collect customer payment (hosted checkout)
+
+**`POST /api/payments/checkout`**
+
+Starts a hosted checkout session so a **customer** can pay the API key owner. On success, the amount is credited to the merchant wallet and a **`payment.received`** webhook is sent (see [Webhooks](/get-started/webhooks)).
+
+Optional query: `?currency=NGN` — display / input currency hint for money context.
+
+### Request body
+
+| Field               | Type   | Required | Description                                                                               |
+| ------------------- | ------ | -------- | ----------------------------------------------------------------------------------------- |
+| `amount`            | number | Yes      | Amount to collect (positive) in input currency                                            |
+| `customerEmail`     | string | Yes      | Customer email for the hosted checkout session                                            |
+| `merchantReference` | string | No       | Your reconciliation idempotency key — echoed in the webhook                               |
+| `currencyCode`      | string | No       | ISO 4217 for the amount. Defaults to corridor wallet currency.                            |
+| `inputCurrency`     | string | No       | Alias of `currencyCode`                                                                   |
+| `callbackUrl`       | string | No       | Post-payment redirect on an **allowed origin**. Server appends `ref=<payment reference>`. |
+
+```json
+{
+    "amount": 5000,
+    "customerEmail": "customer@example.com",
+    "merchantReference": "order-48291",
+    "inputCurrency": "NGN",
+    "callbackUrl": "https://your-app.com/payments/complete"
+}
+```
+
+Allowed callback origins include `localhost:3000`, `localhost:3001`, `api-dashboard.waysdrop.com`, `staging-api-dashboard.waysdrop.com`, plus origins from `USER_FRONTEND_URL`, `ADMIN_FRONTEND_URL`, and `API_DASHBOARD_FRONTEND_URL`.
+
+### Success — `200 OK`
+
+```json
+{
+    "success": true,
+    "message": "Payment checkout started successfully",
+    "data": {
+        "processor": "PAYSTACK",
+        "reference": "DEP_xxx",
+        "charge_currency": "NGN",
+        "charge_amount": 5000,
+        "authorization_url": "https://checkout.paystack.com/…",
+        "access_code": "…"
+    }
+}
+```
+
+Redirect the customer to `checkout_url` or `authorization_url`. Store `reference` (and your `merchantReference`) to reconcile the **`payment.received`** webhook.
+
+---
+
+## 16. Get account summary
 
 **`GET /api/account`**
 
@@ -1132,19 +1199,19 @@ Lightweight corridor summary for bootstrapping FX/display in your integration.
 
 ```json
 {
-  "success": true,
-  "message": "Account retrieved successfully",
-  "data": {
-    "userId": "uuid",
-    "countryCode": "NG",
-    "displayCurrency": "NGN",
-    "merchantWalletCurrencyCode": "NGN",
-    "storeProfile": {
-      "id": "uuid",
-      "name": "My Store",
-      "tag": "my-store-core"
+    "success": true,
+    "message": "Account retrieved successfully",
+    "data": {
+        "userId": "uuid",
+        "countryCode": "NG",
+        "displayCurrency": "NGN",
+        "merchantWalletCurrencyCode": "NGN",
+        "storeProfile": {
+            "id": "uuid",
+            "name": "My Store",
+            "tag": "my-store-core"
+        }
     }
-  }
 }
 ```
 
@@ -1152,7 +1219,7 @@ Lightweight corridor summary for bootstrapping FX/display in your integration.
 
 ---
 
-## 16. Exchange rate
+## 17. Exchange rate
 
 **`GET /api/exchange-rate`**
 
@@ -1160,8 +1227,8 @@ Partner-namespace alias for FX lookup. Requires **`api-key`** header.
 
 ### Query params
 
-| Param  | Type   | Required | Description        |
-| ------ | ------ | -------- | ------------------ |
+| Param  | Type   | Required | Description          |
+| ------ | ------ | -------- | -------------------- |
 | `from` | string | Yes      | ISO 4217 (3 letters) |
 | `to`   | string | Yes      | ISO 4217 (3 letters) |
 
@@ -1169,14 +1236,14 @@ Partner-namespace alias for FX lookup. Requires **`api-key`** header.
 
 ```json
 {
-  "success": true,
-  "message": "Exchange rate fetched successfully",
-  "data": {
-    "from": "USD",
-    "to": "NGN",
-    "rate": 1500,
-    "isStale": false
-  }
+    "success": true,
+    "message": "Exchange rate fetched successfully",
+    "data": {
+        "from": "USD",
+        "to": "NGN",
+        "rate": 1500,
+        "isStale": false
+    }
 }
 ```
 
@@ -1184,32 +1251,32 @@ JWT clients may also use `GET /currency/rate` with the same query params.
 
 ---
 
-## 17. Convert currency
+## 18. Convert currency
 
 **`GET /api/convert`**
 
 ### Query params
 
-| Param    | Type   | Required | Description        |
-| -------- | ------ | -------- | ------------------ |
-| `from`   | string | Yes      | ISO 4217 source    |
-| `to`     | string | Yes      | ISO 4217 target    |
+| Param    | Type   | Required | Description               |
+| -------- | ------ | -------- | ------------------------- |
+| `from`   | string | Yes      | ISO 4217 source           |
+| `to`     | string | Yes      | ISO 4217 target           |
 | `amount` | number | Yes      | Amount in `from` currency |
 
 ### Success — `200 OK`
 
 ```json
 {
-  "success": true,
-  "message": "Amount converted successfully",
-  "data": {
-    "from": "USD",
-    "to": "NGN",
-    "amount": 100,
-    "convertedAmount": 150000,
-    "rate": 1500,
-    "isStale": false
-  }
+    "success": true,
+    "message": "Amount converted successfully",
+    "data": {
+        "from": "USD",
+        "to": "NGN",
+        "amount": 100,
+        "convertedAmount": 150000,
+        "rate": 1500,
+        "isStale": false
+    }
 }
 ```
 

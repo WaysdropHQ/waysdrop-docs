@@ -85,7 +85,33 @@ Use `authorization_url` or `checkout_url` — do not hard-code Paystack-only han
 
 `GET /api/wallet` returns balance in **native wallet currency** with optional `balanceDisplay`.
 
-`paymentMethodType: "WALLET"` debits the merchant wallet at create time. Preflight with `GET /api/wallet` before booking.
+### Top up (merchant → own wallet)
+
+Partner `/api/*` does not include a **self-deposit** route — your `api-key` cannot top up your own wallet. Add funds from the [API dashboard](https://api-dashboard.waysdrop.com): hosted card checkout (Nomba / Paystack / Stripe by corridor). See [Funding your wallet](/get-started/api-keys#funding-your-wallet) for staging test card and live options.
+
+To **programmatically** increase balance via API, use **`POST /api/payments/checkout`** so a customer pays you (credited to merchant wallet — next section). That is not the same as depositing your own funds.
+
+### Collect from a customer (Partner API)
+
+**`POST /api/payments/checkout`** — hosted checkout where **your customer** pays you. Send `amount`, `customerEmail`, and optionally `merchantReference` and `callbackUrl`. On success the merchant wallet is credited and a **`payment.received`** webhook is sent. Full shape: [Collect customer payment](/api-reference/api#15-collect-customer-payment-hosted-checkout).
+
+### Pay for a delivery
+
+| `paymentMethodType`    | Behaviour                                                                                                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`WALLET`** (default) | Debits the merchant wallet at `POST /api/request` for the creator delivery share. Preflight with `GET /api/wallet`.                                              |
+| **`CHECKOUT`**         | Returns hosted checkout fields on create. Courier matching starts after payment confirms — signal is **`p2p.delivery.created`**, not a separate payment webhook. |
+
+### Post-payment redirect (`callbackUrl`)
+
+Optional on both checkout paths. The server appends `ref=<reference>`; URL must be on an [allowed origin](/api-reference/api#15-collect-customer-payment-hosted-checkout).
+
+| Flow                           | Where to send `callbackUrl`                                   |
+| ------------------------------ | ------------------------------------------------------------- |
+| Customer pays you (standalone) | `POST /api/payments/checkout` body                            |
+| Creator share at booking       | `POST /api/request` body when `paymentMethodType: "CHECKOUT"` |
+
+Calling checkout from a **browser app** requires `serverOnly: false` on the API key — see [API Keys](/get-started/api-keys#client-side-usage-serveronly).
 
 ## Exchange rates
 
