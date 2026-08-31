@@ -1,0 +1,42 @@
+---
+title: Official SDKs
+description: Waysdrop Partner API client libraries
+---
+
+Waysdrop provides official SDKs for the Partner API (`/api/*`) and outbound webhook verification.
+
+| Language             | Package                           | Install                                  |
+| -------------------- | --------------------------------- | ---------------------------------------- |
+| Node.js / TypeScript | `@waysdrop/sdk`                   | `npm install @waysdrop/sdk`              |
+| Python               | `waysdrop`                        | `pip install waysdrop`                   |
+| Go                   | `github.com/waysdrop/waysdrop-go` | `go get github.com/waysdrop/waysdrop-go` |
+| PHP                  | `waysdrop/sdk`                    | `composer require waysdrop/sdk`          |
+| Rust                 | `waysdrop`                        | `cargo add waysdrop`                     |
+| Dart / Flutter       | `waysdrop`                        | `dart pub add waysdrop`                  |
+
+## Quickstart (Node.js)
+
+```typescript
+import { WaysdropClient } from "@waysdrop/sdk";
+
+const client = new WaysdropClient({
+    apiKey: process.env.WAYSDROP_API_KEY!,
+    displayCurrency: "NGN",
+});
+
+const account = await client.getAccount();
+```
+
+## Webhooks
+
+Every SDK includes `verifySignature` and `parseWebhook`. Always verify against the **raw request body** — re-serializing JSON breaks signature validation.
+
+```typescript
+import { verifySignature, parseWebhook } from "@waysdrop/sdk/webhooks";
+```
+
+See [Webhooks](/get-started/webhooks) for the full event catalog.
+
+## Source
+
+OpenAPI spec and shared fixtures live in the `waysdrop-api-spec` repository directory in the Waysdrop workspace.

@@ -17,7 +17,8 @@
                 "get-started/integration-guide",
                 "get-started/oauth",
                 "get-started/errors",
-                "get-started/webhooks"
+                "get-started/webhooks",
+                "get-started/sdks"
             ]
         },
         {
