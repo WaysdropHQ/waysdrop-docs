@@ -37,6 +37,32 @@ import { verifySignature, parseWebhook } from "@waysdrop/sdk/webhooks";
 
 See [Webhooks](/get-started/webhooks) for the full event catalog.
 
-## Source
+## Typings
 
-OpenAPI spec and shared fixtures live in the `waysdrop-api-spec` repository directory in the Waysdrop workspace.
+v1 SDKs ship typed responses for all 18 Partner API methods plus webhook envelopes. Node.js includes discriminated webhook event types; other languages expose equivalent response models or static-analysis types (PHPStan, TypedDict, etc.).
+
+OAuth (Sign in with Waysdrop) is planned for **v2** as a separate module — see [OAuth](/get-started/oauth) for the HTTP contract today.
+
+## API spec (source of truth)
+
+OpenAPI, JSON Schemas, webhook event definitions, and shared test fixtures live in the public spec repo:
+
+**[github.com/WaysdropHQ/waysdrop-api-spec](https://github.com/WaysdropHQ/waysdrop-api-spec)**
+
+| Artifact | Path in repo |
+| -------- | ------------ |
+| Partner API OpenAPI 3.1 | `openapi/partner-api.yaml` |
+| Shared types & enums | `schemas/` |
+| Webhook payloads | `schemas/webhooks/` |
+| Signature test vector | `fixtures/signature.json` |
+
+Spec releases are tagged (`v1.0.0`, …). When the Partner API changes, update the spec first, then bump SDKs.
+
+Validation locally:
+
+```bash
+git clone https://github.com/WaysdropHQ/waysdrop-api-spec.git
+cd waysdrop-api-spec
+chmod +x scripts/*.sh
+./scripts/validate-schemas.sh
+```
