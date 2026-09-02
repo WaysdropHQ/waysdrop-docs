@@ -3,7 +3,7 @@ title: Official SDKs
 description: Waysdrop Partner API client libraries
 ---
 
-Waysdrop provides official SDKs for the Partner API (`/api/*`) and outbound webhook verification.
+Waysdrop provides official SDKs for the Partner API (`/api/*`), outbound webhook verification, and OAuth (Sign in with Waysdrop).
 
 | Language             | Package                           | Install                                  |
 | -------------------- | --------------------------------- | ---------------------------------------- |
@@ -37,11 +37,42 @@ import { verifySignature, parseWebhook } from "@waysdrop/sdk/webhooks";
 
 See [Webhooks](/get-started/webhooks) for the full event catalog.
 
+## OAuth (Sign in with Waysdrop)
+
+OAuth ships as a **separate import** in SDK v1.1+. It does not change Partner API (`/api/*`) clients.
+
+| Language | Import                                                                |
+| -------- | --------------------------------------------------------------------- |
+| Node.js  | `import { OAuthClient, generatePkcePair } from "@waysdrop/sdk/oauth"` |
+| Python   | `from waysdrop.oauth import OAuthClient, generate_pkce_pair`          |
+| Go       | `github.com/waysdrop/waysdrop-go/oauth`                               |
+| PHP      | `Waysdrop\OAuth\Client`                                               |
+| Rust     | `waysdrop::oauth`                                                     |
+| Dart     | `package:waysdrop/oauth.dart`                                         |
+
+```typescript
+import { OAuthClient, generatePkcePair } from "@waysdrop/sdk/oauth";
+
+const oauth = new OAuthClient({
+    clientId: process.env.WAYSDROP_OAUTH_CLIENT_ID!,
+    redirectUri: "https://example.com/oauth/callback",
+});
+
+const pkce = generatePkcePair();
+const authorizeUrl = oauth.buildAuthorizeUrl({ pkce, state: "csrf" });
+// Redirect user → exchange code on callback
+const tokens = await oauth.exchangeCode({
+    code,
+    codeVerifier: pkce.codeVerifier,
+});
+const user = await oauth.getUserInfo(tokens.access_token);
+```
+
+Full HTTP flow: [OAuth](/get-started/oauth). Contract: [waysdrop-api-spec `openapi/oauth-protocol.yaml`](https://github.com/WaysdropHQ/waysdrop-api-spec).
+
 ## Typings
 
-v1 SDKs ship typed responses for all 18 Partner API methods plus webhook envelopes. Node.js includes discriminated webhook event types; other languages expose equivalent response models or static-analysis types (PHPStan, TypedDict, etc.).
-
-OAuth (Sign in with Waysdrop) is planned for **v2** as a separate module — see [OAuth](/get-started/oauth) for the HTTP contract today.
+v1 SDKs ship typed responses for all 18 Partner API methods plus webhook envelopes. OAuth adds typed `TokenResponse`, `UserInfo`, and discovery documents.
 
 ## API spec (source of truth)
 
@@ -49,14 +80,17 @@ OpenAPI, JSON Schemas, webhook event definitions, and shared test fixtures live 
 
 **[github.com/WaysdropHQ/waysdrop-api-spec](https://github.com/WaysdropHQ/waysdrop-api-spec)**
 
-| Artifact | Path in repo |
-| -------- | ------------ |
-| Partner API OpenAPI 3.1 | `openapi/partner-api.yaml` |
-| Shared types & enums | `schemas/` |
-| Webhook payloads | `schemas/webhooks/` |
-| Signature test vector | `fixtures/signature.json` |
+| Artifact                           | Path in repo                  |
+| ---------------------------------- | ----------------------------- |
+| Partner API OpenAPI 3.1            | `openapi/partner-api.yaml`    |
+| OAuth protocol OpenAPI 3.1         | `openapi/oauth-protocol.yaml` |
+| Shared types & enums               | `schemas/`                    |
+| OAuth schemas                      | `schemas/oauth/`              |
+| Webhook payloads                   | `schemas/webhooks/`           |
+| Signature test vector              | `fixtures/signature.json`     |
+| OAuth fixtures (incl. PKCE vector) | `fixtures/oauth-*.json`       |
 
-Spec releases are tagged (`v1.0.0`, …). When the Partner API changes, update the spec first, then bump SDKs.
+Spec releases are tagged (`v1.0.0`, `v2.0.0`, …). When the Partner API or OAuth protocol changes, update the spec first, then bump SDKs.
 
 Validation locally:
 
