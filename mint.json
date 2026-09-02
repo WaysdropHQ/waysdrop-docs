@@ -13,14 +13,23 @@
             "group": "Get started",
             "pages": [
                 "get-started/api-keys",
+                "get-started/money-and-currencies",
+                "get-started/integration-guide",
                 "get-started/oauth",
                 "get-started/errors",
-                "get-started/webhooks"
+                "get-started/webhooks",
+                "get-started/sdks"
             ]
         },
         {
             "group": "API reference",
-            "pages": ["api-reference/api", "api-reference/file"]
+            "pages": [
+                "api-reference/api",
+                "api-reference/exchange-rates",
+                "api-reference/payments",
+                "api-reference/merchant",
+                "api-reference/file"
+            ]
         }
     ]
 }

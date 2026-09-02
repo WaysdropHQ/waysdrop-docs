@@ -31,6 +31,10 @@ API keys must match this format:
 
 If the header is missing or malformed, the request returns `401 Unauthorized`.
 
+### Client-side usage (`serverOnly`)
+
+Each key has a **`serverOnly`** setting (default `true`). When enabled, browser requests are blocked — use server-to-server calls only. Disable `serverOnly` on a key if you need to call the API from a frontend (e.g. checkout or pricing from your web app).
+
 ## Funding your wallet
 
 On **staging**, you can fund your wallet in the dev mobile app using this test card:
@@ -41,7 +45,7 @@ Expiry: 11/26
 CVV: 408
 ```
 
-On **live**, fund your wallet using a real card or a dedicated virtual account.
+On **live**, fund your wallet using a real card or a dedicated virtual account from the partner dashboard. To collect payment from your customers programmatically, use `POST /api/payments/checkout` — see [API reference](/api-reference/api#15-collect-customer-payment-hosted-checkout).
 
 ## Error responses
 

@@ -1,0 +1,102 @@
+---
+title: Official SDKs
+description: Waysdrop Partner API client libraries
+---
+
+Waysdrop provides official SDKs for the Partner API (`/api/*`), outbound webhook verification, and OAuth (Sign in with Waysdrop).
+
+| Language             | Package                           | Install                                  |
+| -------------------- | --------------------------------- | ---------------------------------------- |
+| Node.js / TypeScript | `@waysdrop/sdk`                   | `npm install @waysdrop/sdk`              |
+| Python               | `waysdrop`                        | `pip install waysdrop`                   |
+| Go                   | `github.com/waysdrop/waysdrop-go` | `go get github.com/waysdrop/waysdrop-go` |
+| PHP                  | `waysdrop/sdk`                    | `composer require waysdrop/sdk`          |
+| Rust                 | `waysdrop`                        | `cargo add waysdrop`                     |
+| Dart / Flutter       | `waysdrop`                        | `dart pub add waysdrop`                  |
+
+## Quickstart (Node.js)
+
+```typescript
+import { WaysdropClient } from "@waysdrop/sdk";
+
+const client = new WaysdropClient({
+    apiKey: process.env.WAYSDROP_API_KEY!,
+    displayCurrency: "NGN",
+});
+
+const account = await client.getAccount();
+```
+
+## Webhooks
+
+Every SDK includes `verifySignature` and `parseWebhook`. Always verify against the **raw request body** — re-serializing JSON breaks signature validation.
+
+```typescript
+import { verifySignature, parseWebhook } from "@waysdrop/sdk/webhooks";
+```
+
+See [Webhooks](/get-started/webhooks) for the full event catalog.
+
+## OAuth (Sign in with Waysdrop)
+
+OAuth ships as a **separate import** in SDK v1.1+. It does not change Partner API (`/api/*`) clients.
+
+| Language | Import                                                                |
+| -------- | --------------------------------------------------------------------- |
+| Node.js  | `import { OAuthClient, generatePkcePair } from "@waysdrop/sdk/oauth"` |
+| Python   | `from waysdrop.oauth import OAuthClient, generate_pkce_pair`          |
+| Go       | `github.com/waysdrop/waysdrop-go/oauth`                               |
+| PHP      | `Waysdrop\OAuth\Client`                                               |
+| Rust     | `waysdrop::oauth`                                                     |
+| Dart     | `package:waysdrop/oauth.dart`                                         |
+
+```typescript
+import { OAuthClient, generatePkcePair } from "@waysdrop/sdk/oauth";
+
+const oauth = new OAuthClient({
+    clientId: process.env.WAYSDROP_OAUTH_CLIENT_ID!,
+    redirectUri: "https://example.com/oauth/callback",
+});
+
+const pkce = generatePkcePair();
+const authorizeUrl = oauth.buildAuthorizeUrl({ pkce, state: "csrf" });
+// Redirect user → exchange code on callback
+const tokens = await oauth.exchangeCode({
+    code,
+    codeVerifier: pkce.codeVerifier,
+});
+const user = await oauth.getUserInfo(tokens.access_token);
+```
+
+Full HTTP flow: [OAuth](/get-started/oauth). Contract: [waysdrop-api-spec `openapi/oauth-protocol.yaml`](https://github.com/WaysdropHQ/waysdrop-api-spec).
+
+## Typings
+
+v1 SDKs ship typed responses for all 18 Partner API methods plus webhook envelopes. OAuth adds typed `TokenResponse`, `UserInfo`, and discovery documents.
+
+## API spec (source of truth)
+
+OpenAPI, JSON Schemas, webhook event definitions, and shared test fixtures live in the public spec repo:
+
+**[github.com/WaysdropHQ/waysdrop-api-spec](https://github.com/WaysdropHQ/waysdrop-api-spec)**
+
+| Artifact                           | Path in repo                  |
+| ---------------------------------- | ----------------------------- |
+| Partner API OpenAPI 3.1            | `openapi/partner-api.yaml`    |
+| OAuth protocol OpenAPI 3.1         | `openapi/oauth-protocol.yaml` |
+| Shared types & enums               | `schemas/`                    |
+| OAuth schemas                      | `schemas/oauth/`              |
+| Webhook payloads                   | `schemas/webhooks/`           |
+| Signature test vector              | `fixtures/signature.json`     |
+| OAuth fixtures (incl. PKCE vector) | `fixtures/oauth-*.json`       |
+
+Spec releases are tagged (`v1.0.0`, `v2.0.0`, …). When the Partner API or OAuth protocol changes, update the spec first, then bump SDKs.
+
+Validation locally:
+
+```bash
+git clone https://github.com/WaysdropHQ/waysdrop-api-spec.git
+cd waysdrop-api-spec
+chmod +x scripts/*.sh
+./scripts/validate-schemas.sh
+```

@@ -100,6 +100,45 @@ Webhooks are delivered asynchronously and retried until one of these happens:
 
 All timestamps are serialized as ISO strings.
 
+### Money in webhooks
+
+Money-bearing webhooks follow the [two-layer model](/get-started/money-and-currencies):
+
+| Field pattern                                                 | Meaning                                                                                    |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `totalValue`, `costs.*`, `amount`, `refundAmount`             | **USD catalog / ledger**                                                                   |
+| `*Display` companions                                         | Local formatting in your corridor currency: `{ usd, local: { currency, amount, symbol } }` |
+| `refundInputAmount`, `refundCurrencyCode`, `fxRateUsdToLocal` | Native wallet credit on cancel (when a refund transaction exists)                          |
+
+Display fields are added server-side at delivery time — you cannot pass `?currency=` on webhooks.
+
+### payment.received
+
+Fired when a customer completes payment via **`POST /api/payments/checkout`**. The amount is credited to your merchant wallet.
+
+```json
+{
+    "event": "payment.received",
+    "data": {
+        "reference": "DEP_xxx",
+        "merchantReference": "order-48291",
+        "amount": "5000.00",
+        "amountDisplay": {
+            "usd": 3.33,
+            "local": { "currency": "NGN", "amount": 5000, "symbol": "₦" }
+        },
+        "currencyCode": "NGN",
+        "amountUsd": "3.33",
+        "status": "SUCCESS",
+        "walletChannel": "MERCHANT",
+        "customerEmail": "customer@example.com",
+        "createdAt": "2025-01-01T12:00:00.000Z"
+    }
+}
+```
+
+`merchantReference` is `null` when you did not send one on checkout create. Use `reference` (Waysdrop) for processor reconciliation.
+
 ### p2p.delivery.created
 
 ```json
@@ -114,9 +153,19 @@ All timestamps are serialized as ISO strings.
         "profileId": "uuid",
         "totalWeight": "number",
         "totalValue": "number",
+        "totalValueDisplay": {
+            "usd": "number",
+            "local": {
+                "currency": "string",
+                "amount": "number",
+                "symbol": "string"
+            }
+        },
         "costs": {
             "total": "number",
+            "totalDisplay": { "usd": "number", "local": {} },
             "weight": "number",
+            "weightDisplay": { "usd": "number", "local": {} },
             "urgency": "number",
             "fleet": "number",
             "insurance": "number",
@@ -143,10 +192,16 @@ All timestamps are serialized as ISO strings.
         "p2pDeliveryId": "uuid",
         "status": "CANCELLED",
         "canceledAt": "2026-01-24T12:34:56.789Z",
-        "refundAmount": "number | null"
+        "refundAmount": "number | null",
+        "refundAmountDisplay": { "usd": "number", "local": {} },
+        "refundInputAmount": "number | null",
+        "refundCurrencyCode": "string | null",
+        "fxRateUsdToLocal": "number | null"
     }
 }
 ```
+
+`refundAmount` is USD ledger. Native wallet credit appears on `refundInputAmount` / `refundCurrencyCode` when a matching refund transaction exists.
 
 ### delivery.request.accepted
 
@@ -192,8 +247,9 @@ All timestamps are serialized as ISO strings.
         "p2pDeliveryId": "uuid",
         "refundExpected": {
             "amount": "number",
-            "currency": "string"
-        }
+            "amountDisplay": { "usd": "number", "local": {} }
+        },
+        "refundExpectedDisplay": { "usd": "number", "local": {} }
     }
 }
 ```
@@ -382,13 +438,18 @@ Emitted when an employer directly reassigns deliveries to an employee (no reques
 
 ### order.requested
 
-Emitted when a store receives a new order request.
+Emitted when a store receives a new order request. The nested `order` object includes line-item `priceDisplay` fields and order totals when available.
 
 ```json
 {
     "event": "order.requested",
     "data": {
-        "order": {},
+        "order": {
+            "id": "uuid",
+            "finalTotal": "number",
+            "finalTotalDisplay": { "usd": "number", "local": {} },
+            "items": []
+        },
         "storeProfileId": "uuid",
         "storeUserId": "uuid"
     }
@@ -408,6 +469,7 @@ Emitted when a store receives a new order request.
         "userId": "uuid",
         "profileId": "uuid",
         "amount": "number",
+        "amountDisplay": { "usd": "number", "local": {} },
         "source": "string",
         "status": "AWAITING_CONFIRMATION"
     }
@@ -450,8 +512,9 @@ Emitted when a store receives a new order request.
         "declinedAt": "2026-01-24T12:34:56.789Z",
         "refundExpected": {
             "amount": "number",
-            "currency": "string"
-        }
+            "amountDisplay": { "usd": "number", "local": {} }
+        },
+        "refundExpectedDisplay": { "usd": "number", "local": {} }
     }
 }
 ```
