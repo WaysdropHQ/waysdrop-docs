@@ -1,0 +1,30 @@
+---
+title: Embed widget (public key)
+description: Browser-safe Partner API routes for upcoming embeddable widgets
+---
+
+Use a **public API key** (`wsp_pub_live_…` / `wsp_pub_staging_…`) in browser code — never embed your secret key.
+
+## Allowed routes
+
+Public keys work on quote/geo and payment routes:
+
+- `GET /api/countries`, `states`, `cities`, `fleet-types`
+- `POST /api/route`, `POST /api/pricing`
+- `GET /api/exchange-rate`, `GET /api/convert`
+- `POST /api/payments/checkout` — collect payment from a customer (hosted checkout)
+- `GET /api/payments/by-external-reference/{ref}` — look up payment status by your order ID
+
+Deliveries, wallet, and packages still require the **secret** key on your backend.
+
+## Setup
+
+1. Create an integration in the [API dashboard](https://api-dashboard.waysdrop.com) — you receive a secret + public pair once.
+2. Add your site origin(s) under **Allowed origins** for the public key.
+3. Call the API from the browser with the `api-key` header set to the public key.
+
+Public requests are rate-limited and **not** billed as paid API usage.
+
+## Reconciliation
+
+Pass `externalReference` on checkout (and on `POST /api/request` from your server) so webhooks and `GET /api/payments/by-external-reference/{ref}` stay aligned with your order IDs.

@@ -27,6 +27,18 @@ const client = new WaysdropClient({
 const account = await client.getAccount();
 ```
 
+## Public API keys (browser / widgets)
+
+SDK **v1.2+** accepts public keys (`wsp_pub_live_…` / `wsp_pub_staging_…`) for browser-safe routes: countries, route, pricing, exchange-rate, convert, fleet-types, payment checkout, and payment lookup by external reference. Use your **secret** key on the server for deliveries, wallet, and packages.
+
+```typescript
+import { inferKeyType } from "@waysdrop/sdk";
+
+inferKeyType(process.env.WAYSDROP_PUBLIC_KEY!); // "public"
+```
+
+Configure allowed origins in the [API dashboard](https://api-dashboard.waysdrop.com). See [Embed widget](/get-started/embed-widget).
+
 ## Webhooks
 
 Every SDK includes `verifySignature` and `parseWebhook`. Always verify against the **raw request body** — re-serializing JSON breaks signature validation.
