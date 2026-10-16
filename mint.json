@@ -18,6 +18,7 @@
                 "get-started/oauth",
                 "get-started/errors",
                 "get-started/webhooks",
+                "get-started/embed-widget",
                 "get-started/sdks"
             ]
         },
