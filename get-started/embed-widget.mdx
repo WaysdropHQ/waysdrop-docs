@@ -1,0 +1,147 @@
+---
+title: Embed widget
+description: Let customers request a delivery or buy from your store without leaving your site
+---
+
+The Waysdrop widget puts the delivery request flow on your own site: the customer adds a package, gets a price, verifies their phone or email, and pays, all inside the widget. It works in plain HTML, React or any other frontend, and shows a "Powered by Waysdrop" footer.
+
+A widget acts as **one of your own profiles**:
+
+| `profile` | What the customer does |
+| --- | --- |
+| `courier` (default) | Sends a package with **you** as the courier |
+| `store` | Browses your store, fills a cart and checks out with delivery |
+
+The profile is resolved on the server from the owner of the public key. The widget cannot be pointed at someone else's courier or store, and a `store` widget only works if the key owner actually has a store profile (likewise for `courier`).
+
+## Quick start (HTML)
+
+1. Create an integration in the [API dashboard](https://api-dashboard.waysdrop.com). Open the key's **Overview** tab and use the **Embeddable widget** snippet at the bottom.
+2. Add your site under **Allowed origins** for the public key.
+3. Paste the snippet before `</body>`:
+
+```html
+<script
+    src="https://waysdrop.com/widget.js"
+    data-key="wsp_pub_live_..."
+    data-profile="courier"
+    defer
+></script>
+```
+
+A launcher button appears in the corner of your page. For staging, use `https://staging.waysdrop.com/widget.js` with a `wsp_pub_staging_…` key.
+
+### Script options
+
+| Attribute | Description | Default |
+| --- | --- | --- |
+| `data-key` | Public API key (required) | n/a |
+| `data-profile` | `courier` or `store` | `courier` |
+| `data-country` | ISO country code, e.g. `NG`. Forces the display currency | detected from the visitor |
+| `data-label` | Launcher text | `Send a package` |
+| `data-color` | Launcher background colour | `#0b5cff` |
+| `data-position` | `bottom-right` or `bottom-left` | `bottom-right` |
+| `data-trigger` | CSS selector of your own element(s) that open the widget | none |
+| `data-launcher` | `false` to render no launcher (open it from your own code) | `true` |
+
+### JavaScript API
+
+```js
+Waysdrop.open();
+Waysdrop.close();
+Waysdrop.destroy();
+
+Waysdrop.on("ready", () => {});
+Waysdrop.on("close", () => {});
+Waysdrop.on("error", (err) => {});
+Waysdrop.on("payment", (p) => {
+    // { reference, status, final, trackingId, orderNumber }
+    if (p.final && p.status === "SUCCESS") {
+        console.log("Paid", p.trackingId ?? p.orderNumber);
+    }
+});
+```
+
+## React
+
+```bash
+npm i @waysdrop/widget-react
+```
+
+```tsx
+import { WaysdropWidget } from "@waysdrop/widget-react";
+
+export default function App() {
+    return (
+        <WaysdropWidget
+            publicKey="wsp_pub_live_..."
+            profile="courier"
+            onPayment={(p) => p.final && p.status === "SUCCESS" && console.log(p.trackingId)}
+        />
+    );
+}
+```
+
+Use your own button with the hook:
+
+```tsx
+import { useWaysdrop } from "@waysdrop/widget-react";
+
+function SendButton() {
+    const { open } = useWaysdrop({ publicKey: "wsp_pub_live_...", launcher: false });
+    return <button onClick={open}>Send a package</button>;
+}
+```
+
+Options mirror the script attributes: `publicKey`, `profile`, `country`, `label`, `color`, `position`, `launcher`, plus `onPayment` and `onClose`.
+
+## Display currency
+
+Prices are shown in the visitor's local currency, detected from their location. Pass `country` (or `data-country`) to force one. An explicit country always wins over detection. A country we don't price in falls back to USD.
+
+## Payments
+
+Payment completes from the widget. Depending on the payment processor, checkout is either an inline overlay or a **popup window**; if the browser blocks the popup the widget shows an "Open payment page" button. The widget then polls Waysdrop for the result and emits `payment` events. `final: true` means the status will not change again.
+
+`payment` events carry the delivery `trackingId` (courier) or `orderNumber` (store). For a trustworthy record of payment, rely on your [webhooks](/get-started/webhooks) rather than the browser event. Deliveries and orders created through a widget are attributed to the key, so webhooks for that key fire as usual.
+
+## Security
+
+- Only **public** keys (`wsp_pub_…`) are accepted by the widget. Secret keys are rejected.
+- **Allowed origins** controls which sites may embed the widget. The check is enforced with a `frame-ancestors` policy, so a site that isn't listed cannot frame it. With no origins configured, any site can embed it, so set them for live keys.
+- Widget requests are rate-limited per key and visitor (60 per minute by default) and are not billed as paid API usage.
+- Customers verify with a one-time code before a request or order is created, so no account is needed.
+
+## Behaviour to know
+
+- A courier widget always requests **you**. There is no "any courier" matching.
+- A customer can't request delivery from their own courier. Testing your own widget with your own email or phone returns `409 You cannot request delivery with yourself`; use a different identity (for email, a `+alias` works).
+- Browsers block third-party cookies in iframes, so the widget keeps its guest session without cookies. Clearing site data starts a new session.
+
+## Calling the Partner API from the browser
+
+If you build your own UI instead of the widget, a public key can also call these Partner API routes directly.
+
+### Allowed routes
+
+Public keys work on quote/geo and payment routes:
+
+- `GET /api/countries`, `states`, `cities`, `fleet-types`
+- `POST /api/route`, `POST /api/pricing`
+- `GET /api/exchange-rate`, `GET /api/convert`
+- `POST /api/payments/checkout` — collect payment from a customer (hosted checkout)
+- `GET /api/payments/by-external-reference/{ref}` — look up payment status by your order ID
+
+Deliveries, wallet, and packages still require the **secret** key on your backend.
+
+### Setup
+
+1. Create an integration in the [API dashboard](https://api-dashboard.waysdrop.com) — you receive a secret + public pair once.
+2. Add your site origin(s) under **Allowed origins** for the public key.
+3. Call the API from the browser with the `api-key` header set to the public key.
+
+Public requests are rate-limited and **not** billed as paid API usage.
+
+### Reconciliation
+
+Pass `externalReference` on checkout (and on `POST /api/request` from your server) so webhooks and `GET /api/payments/by-external-reference/{ref}` stay aligned with your order IDs.

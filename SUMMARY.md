@@ -6,6 +6,7 @@
 - [OAuth](get-started/oauth.mdx)
 - [Errors](get-started/errors.mdx)
 - [Webhooks](get-started/webhooks.mdx)
+- [Embed widget](get-started/embed-widget.mdx)
 
 ## API reference
 
