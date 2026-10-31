@@ -1,0 +1,102 @@
+---
+title: "Exchange rates"
+description: "FX rate lookup and currency conversion for partner integrations"
+---
+
+Base URLs:
+
+- Live: `https://api.waysdrop.com`
+- Staging: `https://staging-api.waysdrop.com`
+
+## Partner namespace (API key only)
+
+These routes live under `/api` and require the **`api-key`** header (same as other partner endpoints).
+
+### GET /api/exchange-rate
+
+Get the live exchange rate between two ISO 4217 currencies.
+
+**Query**
+
+| Param  | Type   | Required | Example |
+| ------ | ------ | -------- | ------- |
+| `from` | string | Yes      | `USD`   |
+| `to`   | string | Yes      | `NGN`   |
+
+```bash
+curl -G "https://api.waysdrop.com/api/exchange-rate" \
+  -H "api-key: wsp_live_…" \
+  --data-urlencode "from=USD" \
+  --data-urlencode "to=NGN"
+```
+
+**200 Response**
+
+```json
+{
+    "success": true,
+    "message": "Exchange rate fetched successfully",
+    "data": {
+        "from": "USD",
+        "to": "NGN",
+        "rate": 1500,
+        "isStale": false
+    }
+}
+```
+
+`isStale: true` means the rate is served from cache while a refresh is in progress.
+
+### GET /api/convert
+
+Convert an amount between two currencies.
+
+**Query**
+
+| Param    | Type   | Required | Example |
+| -------- | ------ | -------- | ------- |
+| `from`   | string | Yes      | `USD`   |
+| `to`     | string | Yes      | `NGN`   |
+| `amount` | number | Yes      | `100`   |
+
+```bash
+curl -G "https://api.waysdrop.com/api/convert" \
+  -H "api-key: wsp_live_…" \
+  --data-urlencode "from=USD" \
+  --data-urlencode "to=NGN" \
+  --data-urlencode "amount=100"
+```
+
+**200 Response**
+
+```json
+{
+    "success": true,
+    "message": "Amount converted successfully",
+    "data": {
+        "from": "USD",
+        "to": "NGN",
+        "amount": 100,
+        "convertedAmount": 150000,
+        "rate": 1500,
+        "isStale": false
+    }
+}
+```
+
+## Platform namespace (API key or JWT)
+
+The same FX engine is also exposed under `/currency` for dashboard and mobile clients.
+
+| Method | Path                                  | Auth                                     |
+| ------ | ------------------------------------- | ---------------------------------------- |
+| `GET`  | `/currency/rate?from=&to=`            | `api-key` **or** `Authorization: Bearer` |
+| `GET`  | `/currency/convert?from=&to=&amount=` | `api-key` **or** JWT                     |
+| `GET`  | `/currency/:code`                     | Currency metadata (symbol, decimals)     |
+
+Partners should prefer **`/api/exchange-rate`** and **`/api/convert`** for consistency with the rest of the integration.
+
+## Related
+
+- [Money & currencies](/get-started/money-and-currencies) — when to use catalog USD vs display FX
+- [API module](/api-reference/api) — `GET /api/account` for corridor bootstrap

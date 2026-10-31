@@ -1,0 +1,99 @@
+---
+title: "Integration guide"
+description: "Partner cookbook for food merchants — packages, pricing, checkout, webhooks, and reconciliation"
+---
+
+Guide for restaurants and merchants fulfilling deliveries from their own website using the Waysdrop Partner API.
+
+## Environments
+
+| Environment | API base                           | Dashboard                                                                        |
+| ----------- | ---------------------------------- | -------------------------------------------------------------------------------- |
+| Staging     | `https://staging-api.waysdrop.com` | [staging-api-dashboard.waysdrop.com](https://staging-api-dashboard.waysdrop.com) |
+| Production  | `https://api.waysdrop.com`         | [api-dashboard.waysdrop.com](https://api-dashboard.waysdrop.com)                 |
+
+Use `wsp_staging_…` keys on staging. Staging OTP is always **`000000`**. Wallet deposits on staging are free — useful for `paymentMethodType: "WALLET"` tests.
+
+## Typical food-delivery flow
+
+1. **Create package** — `POST /api/package` with declared meal value (`inputCurrency` when needed)
+2. **Quote delivery** — `POST /api/pricing?currency=NGN` (optional display override)
+3. **Preflight wallet** (optional) — `GET /api/wallet` when using `WALLET`
+4. **Book delivery** — `POST /api/request` with payment flags
+5. **Redirect customer** — hosted checkout URL when `CHECKOUT` + upfront package value
+6. **Listen for webhooks** — `p2p.delivery.created` means paid and matching started
+7. **Track** — `GET /api/deliveries/:deliveryId` or `GET /api/deliveries`
+
+## Payment rails
+
+Two independent rails on every delivery:
+
+| Rail              | Who pays                                       | When                   |
+| ----------------- | ---------------------------------------------- | ---------------------- |
+| **Delivery fee**  | `CREATOR` (you), `RECIPIENT`, or `SPLIT`       | At `POST /api/request` |
+| **Package value** | `payPackageValue`, `payOnDelivery`, or neither | Checkout or at door    |
+
+Pass the same `deliveryFeePayer` on **`POST /api/pricing`** and **`POST /api/request`** so the quote matches the charge.
+
+### Common strategies
+
+| Goal                                          | Flags                                                                                   |
+| --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Customer pays delivery + food in one checkout | `paymentMethodType: "CHECKOUT"`, `payPackageValue: true`, `deliveryFeePayer: "CREATOR"` |
+| You prepay delivery from wallet               | `paymentMethodType: "WALLET"`, `payPackageValue: false`, `deliveryFeePayer: "CREATOR"`  |
+| Customer pays food at door                    | `payOnDelivery: true`, `podRemitTo: "MY_WALLET"`                                        |
+
+See [Money & currencies](/get-started/money-and-currencies) for catalog USD vs native wallet.
+
+## Webhook lifecycle
+
+| Event                          | When                                | Your action                                                     |
+| ------------------------------ | ----------------------------------- | --------------------------------------------------------------- |
+| `p2p.delivery.created`         | After payment satisfied             | Mark order paid; store `deliveryId` / `trackingId`              |
+| `delivery.awaiting.collection` | Courier assigned, heading to pickup | Notify kitchen                                                  |
+| `delivery.collected`           | Package picked up                   | Mark in transit                                                 |
+| `delivery.delivered`           | Delivered                           | Complete order                                                  |
+| `p2p.delivery.cancelled`       | Cancelled                           | Reverse local state; read `refundAmount` / native refund fields |
+
+There is **no** separate refund webhook. Checkout refunds complete asynchronously via the original processor.
+
+Full payloads: [Webhooks](/get-started/webhooks).
+
+## Handler sketch
+
+```js
+async function handleWaysdropWebhook({ event, data }) {
+    switch (event) {
+        case "p2p.delivery.created":
+            await markOrderPaid(data);
+            break;
+        case "delivery.awaiting.collection":
+        case "delivery.request.accepted":
+            await markCourierAssigned(data);
+            break;
+        case "delivery.collected":
+            await markCollected(data);
+            break;
+        case "delivery.delivered":
+            await markDelivered(data);
+            break;
+        case "p2p.delivery.cancelled":
+            await markCancelled(data);
+            break;
+    }
+}
+```
+
+## Merchant couriers
+
+Use **`courierSelection: "MERCHANT_SPECIAL_COURIERS"`** with couriers saved via the [Merchant API](/api-reference/merchant).
+
+## Checklist
+
+- [ ] API key + webhook URL configured on dashboard
+- [ ] Understand [money layers](/get-started/money-and-currencies) (catalog USD vs wallet native)
+- [ ] Quote and book with matching `deliveryFeePayer`
+- [ ] Handle checkout redirect (`authorization_url` / `checkout_url`) for `CHECKOUT`
+- [ ] Verify webhook signatures with your API key
+- [ ] Handle lifecycle webhooks; poll `GET /api/deliveries/:deliveryId` if missed
+- [ ] Reconcile refunds: `refundAmount` is USD ledger; native credit on `refundInputAmount`
