@@ -12,5 +12,4 @@
 
 - [API module](api-reference/api.mdx)
 - [File](api-reference/file.mdx)
-- [Checkout](api-reference/checkout.mdx)
 - [Webhook endpoints](api-reference/webhooks.mdx)

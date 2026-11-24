@@ -1,6 +1,6 @@
 # Webhooks
 
-Waysdrop sends webhooks for delivery, order, checkout and payment events. Webhooks are delivered asynchronously, at least once, and retried on failure.
+Waysdrop sends webhooks for delivery and payment events. Webhooks are delivered asynchronously, at least once, and retried on failure.
 
 You manage endpoints through the API ([Webhook endpoints](/api-reference/webhooks)): each account can have several endpoints, and each endpoint subscribes to the events it wants.
 
@@ -119,14 +119,6 @@ Subscribe with `enabledEvents` (up to 40 types, or `["*"]` for all). `ping` is o
 | `delivery.delivered`          | `delivery`         | The delivery was completed                                 |
 | `delivery.cancelled`          | `delivery`         | The delivery was cancelled                                 |
 | `delivery.failed`             | `delivery`         | The delivery failed and will not be completed              |
-| `order.created`               | `order`            | An order was placed and paid                               |
-| `order.accepted`              | `order`            | The store accepted the order                               |
-| `order.declined`              | `order`            | The store declined the order                               |
-| `order.ready`                 | `order`            | The order is ready for pickup                              |
-| `order.cancelled`             | `order`            | The order was cancelled                                    |
-| `order.completed`             | `order`            | The order was delivered                                    |
-| `checkout.paid`               | `checkout_session` | A checkout was paid                                        |
-| `checkout.cancelled`          | `checkout_session` | Every order of a checkout was cancelled or declined        |
 | `payment.succeeded`           | `payment`          | A payment succeeded                                        |
 | `payment.failed`              | `payment`          | A payment failed                                           |
 | `payment.refunded`            | `payment`          | A refund was processed                                     |
@@ -164,51 +156,6 @@ The schema also lists `delivery.partially_delivered`, `delivery.stop.arrived`, `
 
 `pickup` and `dropoff` carry the full address projection (`id`, `label`, `addressLine1`, `addressLine2`, `floor`, `city`, `state`, `region`, `country`, `countryCode`, `zipCode`, `lat`, `lng`, `contactName`, `contactPhone`, `contactEmail`, `note`); the example is shortened.
 
-### Order object
-
-`order.*` events:
-
-```json
-{
-    "object": "order",
-    "id": "uuid",
-    "orderNumber": "ORD-100045",
-    "status": "CONFIRMED",
-    "fulfillmentType": "DELIVERY",
-    "deliveryId": "uuid",
-    "trackingId": "WD-ORD-2M4N8P",
-    "checkoutSessionId": "uuid",
-    "store": { "id": "uuid", "name": "Example Store" },
-    "items": [
-        { "id": "uuid", "productId": "uuid", "name": "Example product", "quantity": 2, "unitPrice": { "amountMinor": "999", "currency": "USD" } }
-    ],
-    "itemsTruncated": false,
-    "subtotal": { "amountMinor": "1998", "currency": "USD" },
-    "deliveryFee": { "amountMinor": "550", "currency": "USD" },
-    "total": { "amountMinor": "2548", "currency": "USD" },
-    "createdAt": "2026-11-25T10:00:00.000Z",
-    "updatedAt": "2026-11-25T10:30:00.000Z"
-}
-```
-
-### Checkout session object
-
-`checkout.paid` and `checkout.cancelled`:
-
-```json
-{
-    "object": "checkout_session",
-    "id": "uuid",
-    "status": "PAID",
-    "total": { "amountMinor": "4500", "currency": "USD" },
-    "orderIds": ["uuid", "uuid"],
-    "paymentReference": "PAY-0001",
-    "paidAt": "2026-11-25T10:30:00.000Z",
-    "cancelledAt": null,
-    "createdAt": "2026-11-25T10:00:00.000Z"
-}
-```
-
 ### Payment object
 
 `payment.succeeded`, `payment.failed` and `payment.refunded`:
@@ -221,7 +168,7 @@ The schema also lists `delivery.partially_delivered`, `delivery.stop.arrived`, `
     "kind": "payment",
     "status": "SUCCESS",
     "amount": { "amountMinor": "2548", "currency": "USD" },
-    "orderId": "uuid",
+    "orderId": null,
     "deliveryId": "uuid",
     "createdAt": "2026-11-25T10:30:00.000Z"
 }

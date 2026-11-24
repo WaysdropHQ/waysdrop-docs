@@ -30,7 +30,6 @@
                 "api-reference/payments",
                 "api-reference/merchant",
                 "api-reference/file",
-                "api-reference/checkout",
                 "api-reference/webhooks"
             ]
         }
