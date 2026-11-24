@@ -1,559 +1,234 @@
 # Webhooks
 
-Waysdrop sends webhooks for key order and delivery lifecycle events. Webhooks are delivered asynchronously and retried on failure.
+Waysdrop sends webhooks for delivery, order, checkout and payment events. Webhooks are delivered asynchronously, at least once, and retried on failure.
 
-## Delivery & signature
+You manage endpoints through the API ([Webhook endpoints](/api-reference/webhooks)): each account can have several endpoints, and each endpoint subscribes to the events it wants.
 
-Webhook payloads are POSTed to the webhook URL configured for the API key.
+## Environments
 
-### Environments
+Webhooks are scoped to the environment of the API key that created the endpoint:
 
-Webhooks are scoped to the environment of the API key:
+- Live: `https://api.waysdrop.com` (`livemode: true`)
+- Staging: `https://staging-api.waysdrop.com` (`livemode: false`)
 
-- Live: `https://api.waysdrop.com`
-- Staging: `https://staging-api.waysdrop.com`
+There is no test mode on live: staging is the test environment.
 
-Configure your webhook URL in the matching dashboard:
+## Request
 
-- Live: https://api-dashboard.waysdrop.com
-- Staging: https://staging-api-dashboard.waysdrop.com
+Waysdrop POSTs the event as UTF-8 JSON to your `https` endpoint URL.
 
-### Payload
+| Header                      | Value                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------- |
+| `Content-Type`              | `application/json`                                                           |
+| `User-Agent`                | `Waysdrop-Webhooks/2.0`                                                      |
+| `Waysdrop-Event-Id`         | `evt_<uuid>`, equal to the body `id` (your dedupe key)                       |
+| `Waysdrop-Event-Type`       | For example `delivery.collected`                                             |
+| `Waysdrop-Delivery-Id`      | Identifies this event-to-endpoint delivery; stable across retries            |
+| `Waysdrop-Delivery-Attempt` | `1`, `2`, …                                                                  |
+| `Waysdrop-Signature`        | `t=<unix seconds>,v1=<hex>[,v1=<hex>]`                                       |
+
+## Event envelope
 
 ```json
 {
-    "event": "delivery.in.transit",
-    "data": {}
+    "id": "evt_0193b2f4-1c2d-7a3b-9c4d-5e6f7a8b9c0d",
+    "type": "delivery.collected",
+    "apiVersion": "2026-11-25",
+    "createdAt": "2026-11-25T10:00:00.000Z",
+    "livemode": true,
+    "account": { "id": "uuid" },
+    "sequence": 3,
+    "data": {
+        "object": { "object": "delivery", "id": "uuid" },
+        "previous": { "status": "..." }
+    }
 }
 ```
 
-### Headers
+- **At least once.** Store `id` and ignore a repeat.
+- **Ordering is best effort.** `sequence` increases per resource (`data.object.object` + `data.object.id`). Keep the highest value you applied per resource and ignore anything lower.
+- `data.object` is the full snapshot at the time of the event. `data.previous` holds only the fields that changed, when known.
+- **Money** is always `{ "amountMinor": "150000", "currency": "NGN" }`: integer minor units as a decimal string (it can exceed 2^53). Parse it with a big-integer or decimal type, never a float. See [Money and currencies](/get-started/money-and-currencies).
+- Payloads never contain proof, collection or delivery codes, proof images, IP addresses or courier contact details.
 
-- `Content-Type: application/json`
-- `User-Agent: Waysdrop-Webhook/1.0`
-- `X-Webhook-Log-Id: <logId>`
-- `x-waysdrop-signature: <hex signature>`
+## Verify the signature
 
-**Idempotency**
+```
+signed_payload = t + "." + rawBody
+v1             = lowercase hex( HMAC-SHA256( key = endpoint secret "whsec_…", message = signed_payload ) )
+```
 
-Use `X-Webhook-Log-Id` as an idempotency key. The same event may be retried and delivered more than once; you should safely ignore duplicates by storing processed log IDs.
+Verify in this order:
 
-### Signature
+1. The header must be present and parse as comma-separated `key=value` pairs. `t` is 1 to 12 digits; keep each `v1` that is 64 lowercase hex characters; ignore other keys.
+2. Reject if `|now − t|` is more than 300 seconds.
+3. Compute the HMAC over the **raw request body bytes** with every secret you have configured, and compare against every `v1` in constant time.
+4. Parse the body as JSON.
 
-`x-waysdrop-signature` is computed as:
-
-- Algorithm: `sha256`
-- Secret: your API key value (the same string you send in `api-key`)
-- Input: `JSON.stringify({ event, data })`
-
-**Verification example (Node.js)**
+Never verify a re-serialised body: make your framework expose the raw bytes.
 
 ```js
 import crypto from "crypto";
 
-export function verifyWaysdropSignature({ apiKey, body, signature }) {
-    const computed = crypto
-        .createHmac("sha256", apiKey)
-        .update(body)
-        .digest("hex");
-    return crypto.timingSafeEqual(
-        Buffer.from(computed),
-        Buffer.from(signature),
-    );
+export function verifyWaysdropWebhook(rawBody, header, secrets, toleranceSec = 300) {
+    const parts = header.split(",").map((p) => p.split("="));
+    const t = parts.find(([k]) => k === "t")?.[1];
+    const sigs = parts.filter(([k]) => k === "v1").map(([, v]) => v);
+    if (!t || !/^\d{1,12}$/.test(t) || sigs.length === 0) return false;
+    if (Math.abs(Date.now() / 1000 - Number(t)) > toleranceSec) return false;
+
+    const signedPayload = `${t}.${rawBody}`;
+    return secrets.some((secret) => {
+        const expected = crypto.createHmac("sha256", secret).update(signedPayload).digest("hex");
+        return sigs.some(
+            (s) => s.length === expected.length && crypto.timingSafeEqual(Buffer.from(s), Buffer.from(expected)),
+        );
+    });
 }
 ```
 
-## Your webhook response
+### Secrets and rotation
 
-Waysdrop treats any successful `2xx` response as “delivered”. Your endpoint should respond quickly (Waysdrop times out at 5 seconds).
+A secret looks like `whsec_` plus 43 characters. It is shown once, when you create the endpoint or rotate its secret. When you rotate, the previous secret keeps signing for `expiresInSeconds` (default 86400, max 604800, `0` stops it at once), and `Waysdrop-Signature` carries two `v1` values. Configure both secrets during that window.
 
-**Recommended response**
+## Your response and retries
+
+| Your response                                                   | Result                                                                    |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Any `2xx` within 10 seconds                                     | Success                                                                   |
+| `410 Gone`                                                      | Endpoint disabled (`disabledReason: "gone"`), no more attempts            |
+| Any other 3xx, 4xx or 5xx, a timeout, or a DNS, TLS or connect error | Retried                                                              |
+
+- Redirects are not followed.
+- Retries use exponential backoff with jitter (waits of up to 1 min, 5 min, 30 min, 2 h, then 6 h) for up to 3 days from the first attempt. After that the delivery is `failed`.
+- An endpoint that fails continuously for 3 days is disabled (`disabledReason: "failing"`). Re-enable it with `PATCH /v2/webhooks/endpoints/{id}` and `{"status":"enabled"}`, then replay what you missed.
+- At most 4 requests are in flight to one endpoint at a time.
+- Endpoint URLs must be `https`, without credentials, on port 443 or 1024 to 65535. Loopback, private, link-local and cloud-metadata addresses are refused.
+- You can have at most 16 endpoints.
+
+## Event types
+
+Subscribe with `enabledEvents` (up to 40 types, or `["*"]` for all). `ping` is only sent on request.
+
+| Type                          | Object             | Sent when                                                  |
+| ----------------------------- | ------------------ | ---------------------------------------------------------- |
+| `delivery.created`            | `delivery`         | A delivery was created through the API                     |
+| `delivery.assigned`           | `delivery`         | A courier accepted the delivery                            |
+| `delivery.collected`          | `delivery`         | The courier collected the package                          |
+| `delivery.in_transit`         | `delivery`         | The courier is on the way to the drop-off                  |
+| `delivery.delivered`          | `delivery`         | The delivery was completed                                 |
+| `delivery.cancelled`          | `delivery`         | The delivery was cancelled                                 |
+| `delivery.failed`             | `delivery`         | The delivery failed and will not be completed              |
+| `order.created`               | `order`            | An order was placed and paid                               |
+| `order.accepted`              | `order`            | The store accepted the order                               |
+| `order.declined`              | `order`            | The store declined the order                               |
+| `order.ready`                 | `order`            | The order is ready for pickup                              |
+| `order.cancelled`             | `order`            | The order was cancelled                                    |
+| `order.completed`             | `order`            | The order was delivered                                    |
+| `checkout.paid`               | `checkout_session` | A checkout was paid                                        |
+| `checkout.cancelled`          | `checkout_session` | Every order of a checkout was cancelled or declined        |
+| `payment.succeeded`           | `payment`          | A payment succeeded                                        |
+| `payment.failed`              | `payment`          | A payment failed                                           |
+| `payment.refunded`            | `payment`          | A refund was processed                                     |
+| `ping`                        | `ping`             | A test event you requested                                 |
+
+The schema also lists `delivery.partially_delivered`, `delivery.stop.arrived`, `delivery.stop.completed`, `delivery.stop.failed` and `delivery.plan.changed`. Those belong to multi-stop deliveries, which the Partner API does not create, so you will not receive them.
+
+### Delivery object
+
+`delivery.*` events carry:
 
 ```json
 {
-    "received": true
+    "object": "delivery",
+    "id": "uuid",
+    "trackingId": "WD-P2P-7Q2K9X",
+    "externalReference": "partner-order-1001",
+    "type": "P2P",
+    "status": "PACKAGE_COLLECTED",
+    "routeType": "INTER_CITY",
+    "pickup": { "label": "Warehouse", "addressLine1": "12 Example Street", "city": "Ikeja", "state": "Lagos", "countryCode": "NG", "lat": 6.6018, "lng": 3.3515, "contactName": "Dispatch desk", "contactPhone": "+2340000000000" },
+    "dropoff": { "addressLine1": "3 Sample Close", "city": "Lekki", "state": "Lagos", "countryCode": "NG", "lat": 6.6018, "lng": 3.3515 },
+    "courier": { "id": "uuid" },
+    "fee": { "amountMinor": "1250", "currency": "USD" },
+    "total": { "amountMinor": "1500", "currency": "USD" },
+    "orderId": null,
+    "checkoutSessionId": null,
+    "createdAt": "2026-11-25T10:00:00.000Z",
+    "assignedAt": "2026-11-25T10:00:00.000Z",
+    "collectedAt": "2026-11-25T10:30:00.000Z",
+    "deliveredAt": null,
+    "updatedAt": "2026-11-25T10:30:00.000Z"
 }
 ```
 
-Waysdrop stores your response body in the webhook log for debugging (if any).
+`pickup` and `dropoff` carry the full address projection (`id`, `label`, `addressLine1`, `addressLine2`, `floor`, `city`, `state`, `region`, `country`, `countryCode`, `zipCode`, `lat`, `lng`, `contactName`, `contactPhone`, `contactEmail`, `note`); the example is shortened.
 
-## Retries and delivery guarantees
+### Order object
 
-Webhooks are delivered asynchronously and retried until one of these happens:
-
-- delivered successfully
-- exhausted retry attempts (max: 10)
-
-**Retry conditions**
-
-- Retries on network errors/timeouts.
-- Retries on `408` and `429`.
-- Retries on all `5xx`.
-- Does not retry for other `4xx` responses.
-
-**Backoff**
-
-- `nextRetryAt` uses exponential backoff: `2^attempts` seconds.
-- A repeat job runs roughly every 60 seconds and attempts retries once `nextRetryAt` is due.
-
-## Webhook events
-
-All timestamps are serialized as ISO strings.
-
-### Money in webhooks
-
-Money-bearing webhooks follow the [two-layer model](/get-started/money-and-currencies):
-
-| Field pattern                                                 | Meaning                                                                                    |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `totalValue`, `costs.*`, `amount`, `refundAmount`             | **USD catalog / ledger**                                                                   |
-| `*Display` companions                                         | Local formatting in your corridor currency: `{ usd, local: { currency, amount, symbol } }` |
-| `refundInputAmount`, `refundCurrencyCode`, `fxRateUsdToLocal` | Native wallet credit on cancel (when a refund transaction exists)                          |
-
-Display fields are added server-side at delivery time — you cannot pass `?currency=` on webhooks.
-
-### payment.received
-
-Fired when a customer completes payment via **`POST /api/payments/checkout`**. The amount is credited to your merchant wallet.
+`order.*` events:
 
 ```json
 {
-    "event": "payment.received",
-    "data": {
-        "reference": "DEP_xxx",
-        "merchantReference": "order-48291",
-        "amount": "5000.00",
-        "amountDisplay": {
-            "usd": 3.33,
-            "local": { "currency": "NGN", "amount": 5000, "symbol": "₦" }
-        },
-        "currencyCode": "NGN",
-        "amountUsd": "3.33",
-        "status": "SUCCESS",
-        "walletChannel": "MERCHANT",
-        "customerEmail": "customer@example.com",
-        "createdAt": "2025-01-01T12:00:00.000Z"
-    }
+    "object": "order",
+    "id": "uuid",
+    "orderNumber": "ORD-100045",
+    "status": "CONFIRMED",
+    "fulfillmentType": "DELIVERY",
+    "deliveryId": "uuid",
+    "trackingId": "WD-ORD-2M4N8P",
+    "checkoutSessionId": "uuid",
+    "store": { "id": "uuid", "name": "Example Store" },
+    "items": [
+        { "id": "uuid", "productId": "uuid", "name": "Example product", "quantity": 2, "unitPrice": { "amountMinor": "999", "currency": "USD" } }
+    ],
+    "itemsTruncated": false,
+    "subtotal": { "amountMinor": "1998", "currency": "USD" },
+    "deliveryFee": { "amountMinor": "550", "currency": "USD" },
+    "total": { "amountMinor": "2548", "currency": "USD" },
+    "createdAt": "2026-11-25T10:00:00.000Z",
+    "updatedAt": "2026-11-25T10:30:00.000Z"
 }
 ```
 
-`merchantReference` is `null` when you did not send one on checkout create. Use `reference` (Waysdrop) for processor reconciliation.
+### Checkout session object
 
-### p2p.delivery.created
+`checkout.paid` and `checkout.cancelled`:
 
 ```json
 {
-    "event": "p2p.delivery.created",
-    "data": {
-        "status": "string",
-        "trackingId": "string",
-        "deliveryId": "uuid",
-        "p2pDeliveryId": "uuid",
-        "userId": "uuid",
-        "profileId": "uuid",
-        "totalWeight": "number",
-        "totalValue": "number",
-        "totalValueDisplay": {
-            "usd": "number",
-            "local": {
-                "currency": "string",
-                "amount": "number",
-                "symbol": "string"
-            }
-        },
-        "costs": {
-            "total": "number",
-            "totalDisplay": { "usd": "number", "local": {} },
-            "weight": "number",
-            "weightDisplay": { "usd": "number", "local": {} },
-            "urgency": "number",
-            "fleet": "number",
-            "insurance": "number",
-            "base": "number"
-        },
-        "paymentMethodType": "string",
-        "courierSelection": "string",
-        "urgencyType": "string",
-        "origin": {},
-        "destination": {},
-        "createdAt": "2026-01-24T12:34:56.789Z"
-    }
+    "object": "checkout_session",
+    "id": "uuid",
+    "status": "PAID",
+    "total": { "amountMinor": "4500", "currency": "USD" },
+    "orderIds": ["uuid", "uuid"],
+    "paymentReference": "PAY-0001",
+    "paidAt": "2026-11-25T10:30:00.000Z",
+    "cancelledAt": null,
+    "createdAt": "2026-11-25T10:00:00.000Z"
 }
 ```
 
-### p2p.delivery.cancelled
+### Payment object
+
+`payment.succeeded`, `payment.failed` and `payment.refunded`:
 
 ```json
 {
-    "event": "p2p.delivery.cancelled",
-    "data": {
-        "trackingId": "string",
-        "deliveryId": "uuid",
-        "p2pDeliveryId": "uuid",
-        "status": "CANCELLED",
-        "canceledAt": "2026-01-24T12:34:56.789Z",
-        "refundAmount": "number | null",
-        "refundAmountDisplay": { "usd": "number", "local": {} },
-        "refundInputAmount": "number | null",
-        "refundCurrencyCode": "string | null",
-        "fxRateUsdToLocal": "number | null"
-    }
+    "object": "payment",
+    "id": "uuid",
+    "reference": "TXN-0001",
+    "kind": "payment",
+    "status": "SUCCESS",
+    "amount": { "amountMinor": "2548", "currency": "USD" },
+    "orderId": "uuid",
+    "deliveryId": "uuid",
+    "createdAt": "2026-11-25T10:30:00.000Z"
 }
 ```
 
-`refundAmount` is USD ledger. Native wallet credit appears on `refundInputAmount` / `refundCurrencyCode` when a matching refund transaction exists.
-
-### delivery.request.accepted
+### Ping object
 
 ```json
-{
-    "event": "delivery.request.accepted",
-    "data": {
-        "deliveryId": "uuid",
-        "trackingId": "string",
-        "type": "ORDER | P2P",
-        "status": "ACCEPTED",
-        "routeType": "string",
-        "courierProfileId": "uuid",
-        "origin": {},
-        "destination": {},
-        "storeProfileId": "uuid",
-        "storeLocation": {},
-        "orderId": "uuid",
-        "p2pDeliveryId": "uuid"
-    }
-}
-```
-
-### delivery.request.declined
-
-```json
-{
-    "event": "delivery.request.declined",
-    "data": {
-        "deliveryId": "uuid",
-        "trackingId": "string",
-        "type": "ORDER | P2P",
-        "status": "DECLINED",
-        "routeType": "string",
-        "courierProfileId": "uuid",
-        "courierUserId": "uuid",
-        "origin": {},
-        "destination": {},
-        "storeProfileId": "uuid",
-        "storeLocation": {},
-        "orderId": "uuid",
-        "orderNumber": "string",
-        "p2pDeliveryId": "uuid",
-        "refundExpected": {
-            "amount": "number",
-            "amountDisplay": { "usd": "number", "local": {} }
-        },
-        "refundExpectedDisplay": { "usd": "number", "local": {} }
-    }
-}
-```
-
-### delivery.awaiting.collection
-
-```json
-{
-    "event": "delivery.awaiting.collection",
-    "data": {
-        "deliveryId": "uuid",
-        "trackingId": "string",
-        "type": "ORDER | P2P",
-        "status": "AWAITING_COLLECTION",
-        "routeType": "string",
-        "courierProfileId": "uuid",
-        "origin": {},
-        "destination": {},
-        "proofCode": "string | null",
-        "orderId": "uuid",
-        "storeProfileId": "uuid",
-        "p2pDeliveryId": "uuid",
-        "profileId": "uuid",
-        "updatedAt": "2026-01-24T12:34:56.789Z"
-    }
-}
-```
-
-### delivery.collected
-
-```json
-{
-    "event": "delivery.collected",
-    "data": {
-        "deliveryId": "uuid",
-        "trackingId": "string",
-        "type": "ORDER | P2P",
-        "status": "ORDER_COLLECTED | PACKAGE_COLLECTED",
-        "routeType": "string",
-        "collectedAt": "2026-01-24T12:34:56.789Z",
-        "courierProfileId": "uuid",
-        "courierUserId": "uuid",
-        "origin": {},
-        "destination": {},
-        "deliveryCode": "string | null",
-        "orderId": "uuid",
-        "storeProfileId": "uuid",
-        "p2pDeliveryId": "uuid"
-    }
-}
-```
-
-### delivery.in.transit
-
-```json
-{
-    "event": "delivery.in.transit",
-    "data": {
-        "deliveryId": "uuid",
-        "trackingId": "string",
-        "type": "ORDER | P2P",
-        "status": "IN_TRANSIT",
-        "routeType": "string",
-        "origin": {},
-        "destination": {},
-        "inTransitAt": "2026-01-24T12:34:56.789Z"
-    }
-}
-```
-
-### delivery.delivered
-
-```json
-{
-    "event": "delivery.delivered",
-    "data": {
-        "deliveryId": "uuid",
-        "trackingId": "string",
-        "type": "ORDER | P2P",
-        "status": "DELIVERED",
-        "routeType": "string",
-        "deliveredAt": "2026-01-24T12:34:56.789Z",
-        "courierProfileId": "uuid",
-        "courierUserId": "uuid",
-        "origin": {},
-        "destination": {},
-        "orderId": "uuid",
-        "storeProfileId": "uuid",
-        "p2pDeliveryId": "uuid"
-    }
-}
-```
-
-### delivery.reassignment.created
-
-Emitted when a courier-to-system reassignment is created for one or more deliveries (grouped by `apiKeyId`).
-
-```json
-{
-    "event": "delivery.reassignment.created",
-    "data": {
-        "reassignmentId": "uuid",
-        "type": "string",
-        "status": "string",
-        "fromCourierId": "uuid",
-        "handoverLocation": {},
-        "deliveryIds": ["uuid"],
-        "trackingIds": ["string"],
-        "createdAt": "2026-01-24T12:34:56.789Z"
-    }
-}
-```
-
-### delivery.reassignment.requested
-
-Emitted when the system creates a reassignment request response for a candidate courier (grouped by `apiKeyId`).
-
-```json
-{
-    "event": "delivery.reassignment.requested",
-    "data": {
-        "reassignmentId": "uuid",
-        "status": "string",
-        "type": "string",
-        "courierProfileId": "uuid",
-        "handoverLocation": {},
-        "dominantFleetTypeId": "uuid",
-        "deliveryIds": ["uuid"],
-        "trackingIds": ["string"],
-        "requestedAt": "2026-01-24T12:34:56.789Z"
-    }
-}
-```
-
-### delivery.reassignment.collected
-
-Emitted after reassignment handover proof is validated (grouped by `apiKeyId`).
-
-```json
-{
-    "event": "delivery.reassignment.collected",
-    "data": {
-        "reassignmentId": "uuid",
-        "type": "string",
-        "status": "string",
-        "handoverAt": "2026-01-24T12:34:56.789Z",
-        "handoverLocation": {},
-        "proofImage": "string | null",
-        "fromCourierId": "uuid | null",
-        "toCourierId": "uuid | null",
-        "deliveries": [
-            {
-                "deliveryId": "uuid",
-                "trackingId": "string",
-                "type": "ORDER | P2P",
-                "status": "string",
-                "routeType": "string",
-                "origin": {},
-                "destination": {}
-            }
-        ]
-    }
-}
-```
-
-### delivery.reassignment.direct_assigned
-
-Emitted when an employer directly reassigns deliveries to an employee (no request/proof flow).
-
-```json
-{
-    "event": "delivery.reassignment.direct_assigned",
-    "data": {
-        "deliveryId": "uuid",
-        "trackingId": "string",
-        "type": "ORDER | P2P",
-        "status": "string",
-        "routeType": "string",
-        "reassignmentType": "string",
-        "fromCourierId": "uuid",
-        "toCourierId": "uuid",
-        "assignedAt": "2026-01-24T12:34:56.789Z"
-    }
-}
-```
-
-### order.requested
-
-Emitted when a store receives a new order request. The nested `order` object includes line-item `priceDisplay` fields and order totals when available.
-
-```json
-{
-    "event": "order.requested",
-    "data": {
-        "order": {
-            "id": "uuid",
-            "finalTotal": "number",
-            "finalTotalDisplay": { "usd": "number", "local": {} },
-            "items": []
-        },
-        "storeProfileId": "uuid",
-        "storeUserId": "uuid"
-    }
-}
-```
-
-### order.created
-
-```json
-{
-    "event": "order.created",
-    "data": {
-        "orderId": "uuid",
-        "orderNumber": "string",
-        "deliveryId": "uuid",
-        "trackingId": "string",
-        "userId": "uuid",
-        "profileId": "uuid",
-        "amount": "number",
-        "amountDisplay": { "usd": "number", "local": {} },
-        "source": "string",
-        "status": "AWAITING_CONFIRMATION"
-    }
-}
-```
-
-### order.confirmed
-
-```json
-{
-    "event": "order.confirmed",
-    "data": {
-        "orderId": "uuid",
-        "orderNumber": "string",
-        "deliveryId": "uuid",
-        "trackingId": "string | null",
-        "storeProfileId": "uuid",
-        "storeUserId": "uuid",
-        "storeLocation": {},
-        "status": "CONFIRMED",
-        "confirmedAt": "2026-01-24T12:34:56.789Z"
-    }
-}
-```
-
-### order.declined
-
-```json
-{
-    "event": "order.declined",
-    "data": {
-        "orderId": "uuid",
-        "orderNumber": "string",
-        "deliveryId": "uuid",
-        "trackingId": "string | null",
-        "storeProfileId": "uuid",
-        "storeUserId": "uuid",
-        "storeLocation": {},
-        "status": "DECLINED",
-        "declinedAt": "2026-01-24T12:34:56.789Z",
-        "refundExpected": {
-            "amount": "number",
-            "amountDisplay": { "usd": "number", "local": {} }
-        },
-        "refundExpectedDisplay": { "usd": "number", "local": {} }
-    }
-}
-```
-
-### order.cancelled
-
-```json
-{
-    "event": "order.cancelled",
-    "data": {
-        "orderId": "uuid",
-        "orderNumber": "string",
-        "trackingId": "string",
-        "deliveryId": "uuid",
-        "userId": "uuid",
-        "profileId": "uuid",
-        "refundAmount": "number | null",
-        "status": "CANCELLED",
-        "canceledAt": "2026-01-24T12:34:56.789Z"
-    }
-}
-```
-
-### refund.processed
-
-Sent when a refund tied to your API key has been processed.
-
-```json
-{
-    "event": "refund.processed",
-    "data": {
-        "deliveryId": "uuid | null",
-        "trackingId": "string | null",
-        "externalReference": "string | null",
-        "refundAmount": "string | null",
-        "refundSource": "string | null",
-        "refundKind": "string | null",
-        "reference": "string | null",
-        "processedAt": "2026-01-24T12:34:56.789Z"
-    }
-}
+{ "object": "ping", "id": "uuid", "message": "Test event from Waysdrop. Your endpoint is set up correctly." }
 ```

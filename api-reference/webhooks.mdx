@@ -1,0 +1,98 @@
+# Webhook endpoints
+
+Create and manage the endpoints that receive [webhooks](/get-started/webhooks). Every route authenticates with a **secret** API key in the `api-key` header (`wsp_live_…` or `wsp_staging_…`); public keys are refused. Endpoints belong to the environment of the key. Errors use the [problem format](/get-started/errors#error-format).
+
+Base path: `/v2/webhooks`.
+
+| Method   | Path                                  | Purpose                                      |
+| -------- | ------------------------------------- | -------------------------------------------- |
+| `GET`    | `/v2/webhooks/event-types`            | List subscribable event types                |
+| `POST`   | `/v2/webhooks/endpoints`              | Create an endpoint (returns the secret once) |
+| `GET`    | `/v2/webhooks/endpoints`              | List endpoints                               |
+| `GET`    | `/v2/webhooks/endpoints/{id}`         | Get one endpoint                             |
+| `PATCH`  | `/v2/webhooks/endpoints/{id}`         | Update, enable or disable an endpoint        |
+| `DELETE` | `/v2/webhooks/endpoints/{id}`         | Delete an endpoint                           |
+| `POST`   | `/v2/webhooks/endpoints/{id}/secret/rotate` | Rotate the signing secret              |
+| `POST`   | `/v2/webhooks/endpoints/{id}/ping`    | Send a test `ping` event                     |
+| `GET`    | `/v2/webhooks/endpoints/{id}/deliveries` | List an endpoint's deliveries             |
+| `POST`   | `/v2/webhooks/endpoints/{id}/replay`  | Re-queue past events                         |
+| `GET`    | `/v2/webhooks/deliveries/{id}`        | Get one delivery, with the exact body sent   |
+| `POST`   | `/v2/webhooks/deliveries/{id}/resend` | Send a delivery again                        |
+
+Success bodies are wrapped as `{ "success": true, "data": … }`.
+
+## Create an endpoint
+
+**`POST /v2/webhooks/endpoints`** — rate limit 10 per minute; at most 16 endpoints per account and environment.
+
+| Field           | Type     | Required | Description                                                          |
+| --------------- | -------- | -------- | -------------------------------------------------------------------- |
+| `url`           | string   | Yes      | `https` URL (see the rules in [Webhooks](/get-started/webhooks))     |
+| `enabledEvents` | string[] | Yes      | 1 to 40 event types, or `["*"]` for all. `ping` cannot be subscribed |
+| `description`   | string   | No       | Up to 280 characters                                                 |
+| `apiVersion`    | string   | No       | Payload version; currently only `2026-11-25`                         |
+
+The response is the endpoint plus its signing secret. **This is the only time the secret is returned**; afterwards only `secret.prefix` is shown.
+
+### Endpoint fields
+
+`id`, `url`, `description`, `enabledEvents`, `apiVersion`, `status` (`enabled` or `disabled`), `disabledReason` (`manual`, `gone` or `failing`, else `null`), `disabledAt`, `livemode`, `apiKeyId`, `secret` (`prefix`, `createdAt`, `previousExpiresAt`), `failingSince`, `lastSuccessAt`, `createdAt`, `updatedAt`.
+
+## Update an endpoint
+
+**`PATCH /v2/webhooks/endpoints/{id}`** — rate limit 30 per minute. Send any of `url`, `description`, `enabledEvents`, `apiVersion`, `status`. Omitted fields are unchanged.
+
+- `status: "disabled"` stops new deliveries and cancels pending ones.
+- `status: "enabled"` re-enables an endpoint, including one disabled for failing.
+
+## Rotate the secret
+
+**`POST /v2/webhooks/endpoints/{id}/secret/rotate`** — rate limit 10 per minute.
+
+| Field              | Type    | Required | Description                                                            |
+| ------------------ | ------- | -------- | ---------------------------------------------------------------------- |
+| `expiresInSeconds` | integer | No       | How long the previous secret keeps signing. Default 86400, max 604800, `0` stops it now |
+
+The new secret is returned once.
+
+## Ping
+
+**`POST /v2/webhooks/endpoints/{id}/ping`** — no body; responds `202 Accepted`. Queues a `ping` event to this endpoint. At most 5 pings per endpoint per minute (`429 WEBHOOK_PING_RATE_LIMITED`). The endpoint must be enabled (`409 WEBHOOK_ENDPOINT_DISABLED`).
+
+## Delivery log
+
+**`GET /v2/webhooks/endpoints/{id}/deliveries`** — newest first, keyset paginated (`limit` default 20, max 50; `cursor`). Filter with `status` (`pending`, `sending`, `succeeded`, `failed`, `cancelled`) and `eventType`.
+
+Each item has `id` (equal to the `Waysdrop-Delivery-Id` header), `endpointId`, `eventId`, `eventType`, `status`, `attempts`, `nextAttemptAt`, `lastAttemptAt`, `deadlineAt`, `responseStatus`, `latencyMs`, `errorCode`, `responseBody` (first 1 KiB), `createdAt`, `updatedAt`. The page is `{ "items": [...], "page": { ... } }` with `page.nextCursor` for the next page.
+
+**`GET /v2/webhooks/deliveries/{id}`** returns the same fields plus `request.body`: the exact bytes last sent, which you can verify signatures against.
+
+## Resend
+
+**`POST /v2/webhooks/deliveries/{id}/resend`** — rate limit 30 per minute. Puts the delivery back to `pending` with a fresh 3-day deadline and re-sends the original event (same `id`, `sequence` and body) signed with the current secret. A delivery that is currently `sending` answers `409 WEBHOOK_DELIVERY_IN_FLIGHT`; a disabled endpoint answers `409 WEBHOOK_ENDPOINT_DISABLED`.
+
+## Replay
+
+**`POST /v2/webhooks/endpoints/{id}/replay`** — rate limit 10 per minute.
+
+| Field   | Type     | Required | Description                                                  |
+| ------- | -------- | -------- | ------------------------------------------------------------ |
+| `from`  | ISO 8601 | Yes      | Start of the range (inclusive). Not older than 30 days       |
+| `to`    | ISO 8601 | Yes      | End of the range (exclusive). The range is at most 7 days    |
+| `types` | string[] | No       | Limit to these event types (up to 40)                        |
+
+Re-queues the account's events in `[from, to)`, oldest first, for this endpoint, including events from before the endpoint existed. The endpoint must be enabled. Errors: `422 WEBHOOK_REPLAY_RANGE_INVALID`, `422 WEBHOOK_EVENT_TYPE_UNKNOWN`.
+
+## Webhook error codes
+
+| Status | Code                           | Meaning                                                      |
+| ------ | ------------------------------ | ------------------------------------------------------------ |
+| 404    | `WEBHOOK_ENDPOINT_NOT_FOUND`   | No such endpoint for your account in this environment        |
+| 404    | `WEBHOOK_DELIVERY_NOT_FOUND`   | No such delivery                                             |
+| 409    | `WEBHOOK_ENDPOINT_LIMIT`       | You already have 16 endpoints                                |
+| 409    | `WEBHOOK_ENDPOINT_DISABLED`    | Enable the endpoint first                                    |
+| 409    | `WEBHOOK_DELIVERY_IN_FLIGHT`   | The delivery is being sent right now                         |
+| 422    | `WEBHOOK_URL_INVALID`          | The URL breaks the endpoint URL rules (`details.reason`)     |
+| 422    | `WEBHOOK_EVENT_TYPE_UNKNOWN`   | An event type is not in the catalogue                        |
+| 422    | `WEBHOOK_REPLAY_RANGE_INVALID` | Bad or too-wide replay range                                 |
+| 429    | `WEBHOOK_PING_RATE_LIMITED`    | Too many pings for this endpoint                             |

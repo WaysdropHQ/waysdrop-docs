@@ -28,6 +28,61 @@ All errors use this structure:
 - `message`: human-readable error message
 - `environment`: server environment label
 
+## Error format
+
+Routes under `/v2/` return RFC 9457-style problem bodies. Switch on `code`, not on the message.
+
+```json
+{
+    "type": "urn:waysdrop:problem:VALIDATION_FAILED",
+    "title": "Bad Request",
+    "status": 400,
+    "detail": "url must be a URL address; enabledEvents should not be empty",
+    "instance": "/v2/webhooks/endpoints",
+    "code": "VALIDATION_FAILED",
+    "correlationId": "0f9a6c1e-7b8d-4c2a-9e51-3d2f1a7b6c93",
+    "statusCode": 400,
+    "message": "url must be a URL address; enabledEvents should not be empty",
+    "details": { "code": "VALIDATION_FAILED" },
+    "errors": [
+        { "field": "url", "message": "url must be a URL address" },
+        { "field": "enabledEvents", "message": "enabledEvents should not be empty" }
+    ]
+}
+```
+
+- `code`: stable machine-readable code (also in `details.code`).
+- `errors[]`: per-field validation messages (validation errors only).
+- `correlationId`: quote it to support. It is also returned in the `X-Correlation-Id` response header.
+
+Routes under `/api/` keep the envelope above; `details.code` carries the code where one exists, for example `ADDRESS_PIN_MISMATCH`.
+
+## Idempotency
+
+Writes that create records or move money under `/v2/` take an `Idempotency-Key` header (1 to 255 visible ASCII characters; use a UUID). Where an endpoint requires it, a missing key is `400 IDEMPOTENCY_KEY_REQUIRED`.
+
+- A key is scoped to your account and API key, and a completed response is replayed for 24 hours. A replay carries `Idempotent-Replayed: true`.
+- Reusing a key with a different request is `409 IDEMPOTENCY_KEY_REUSED`.
+- Retrying while the first request is still running is `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` with `Retry-After: 2`. Retry after that delay with the same key.
+- `400 IDEMPOTENCY_KEY_INVALID` means the key is malformed; `409 IDEMPOTENCY_RESPONSE_UNAVAILABLE` means the stored result is no longer available.
+
+On `POST /api/request`, use `externalReference` instead: repeating it returns the stored delivery.
+
+## Pagination
+
+List routes under `/v2/` use keyset pagination: pass `limit` and the opaque `cursor` from `page.nextCursor` of the previous page.
+
+## Rate limits
+
+- A global limit of 180 requests per minute per IP applies. Responses carry `X-RateLimit-*` headers, and `429` responses carry `Retry-After`.
+- Some routes have lower limits, documented on the route.
+- Public keys (`wsp_pub_…`) are limited to 60 requests per minute per key and IP.
+- Quotas are reported in `details.quota` (see below).
+- `402` means API usage is unpaid: top up your wallet.
+- In maintenance and read-only mode, writes answer `400`.
+- Unknown request body fields are stripped.
+- Staging keys work only on staging, live keys only on live.
+
 ## API key auth errors
 
 ### Missing API key

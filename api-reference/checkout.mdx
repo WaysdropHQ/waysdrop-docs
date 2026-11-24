@@ -1,0 +1,84 @@
+# Checkout
+
+Place orders with stores through a checkout session. A session prices the items, lets you adjust delivery options, and is then confirmed to place one order (with its delivery) per store and take payment from your account.
+
+Authenticate with a **secret** API key in the `api-key` header. Errors use the [problem format](/get-started/errors#error-format). Money fields are `{ "amountMinor": "<integer string>", "currency": "USD" }`; see [Money and currencies](/get-started/money-and-currencies).
+
+| Method  | Path                                  | Purpose                              |
+| ------- | ------------------------------------- | ------------------------------------ |
+| `POST`  | `/v2/checkout-sessions`               | Start a checkout                     |
+| `GET`   | `/v2/checkout-sessions`               | List your checkouts                  |
+| `GET`   | `/v2/checkout-sessions/{id}`          | Get one checkout                     |
+| `PATCH` | `/v2/checkout-sessions/{id}`          | Adjust address, stores, promo codes  |
+| `POST`  | `/v2/checkout-sessions/{id}/confirm`  | Place the orders and pay             |
+| `POST`  | `/v2/orders/{orderId}/cancel`         | Cancel one store order               |
+
+Success bodies are wrapped as `{ "success": true, "data": … }`.
+
+## Idempotency
+
+`POST /v2/checkout-sessions` and `POST /v2/checkout-sessions/{id}/confirm` require an `Idempotency-Key` header. See [Idempotency](/get-started/errors#idempotency). Cancel is not idempotent: repeating a successful cancel returns `409 ORDER_NOT_CANCELLABLE`.
+
+## Start a checkout
+
+**`POST /v2/checkout-sessions`**
+
+Creates a `DRAFT` session for the account that owns the API key and returns it priced. A draft expires 2 hours after creation; each successful `PATCH` extends that by 2 hours.
+
+| Field         | Type   | Required | Description                                                                   |
+| ------------- | ------ | -------- | ----------------------------------------------------------------------------- |
+| `kind`        | enum   | Yes      | Use `BUY_NOW` with API keys: the items you send, which never touch a cart     |
+| `items`       | array  | BUY_NOW  | 1 to 20 items: `productId` (UUID), `variantId` (UUID, optional), `options` (optional, up to 20), `quantity` (integer, at least 1) |
+| `addressId`   | UUID   | No       | One of the account's saved addresses                                          |
+| `attribution` | object | No       | `channelSource` (max 64), `channelRef` (max 512)                              |
+
+A session can span at most 10 stores. Unknown fields are stripped, not rejected.
+
+Session fields: `id`, `kind`, `status`, `expiresAt`, `address`, `stores[]` (one leg per store, with `included`, `lines`, `delivery`, `serviceFee`, `itemsSubtotal`, `discount`, `total`, `issues`), `promotions`, `invalidCodes`, `welcomeGift`, `totals`, `setup`, `orders` (empty until confirmed) and `payment` (null until confirmed).
+
+Errors: `ADDRESS_NOT_FOUND` 404, `PRODUCT_UNAVAILABLE` 409, `STORE_UNAVAILABLE` 409, `VARIANT_UNAVAILABLE` 409, `INSUFFICIENT_STOCK` 409 (`details.available`), `INVALID_VARIANT` 400, `INVALID_OPTIONS` 400, `CHECKOUT_STORE_LIMIT` 422, `VALIDATION_FAILED` 400, and the [idempotency errors](/get-started/errors#idempotency).
+
+## List and get
+
+**`GET /v2/checkout-sessions`** lists your checkouts, newest first, with keyset pagination (`limit` up to 50, `cursor`). Filter with `status` and `currency` (3 letters). **`GET /v2/checkout-sessions/{id}`** returns one session (`404 CHECKOUT_SESSION_NOT_FOUND`).
+
+## Adjust a checkout
+
+**`PATCH /v2/checkout-sessions/{id}`** — rate limit 60 per minute. `DRAFT` sessions only.
+
+| Field            | Type     | Description                                                             |
+| ---------------- | -------- | ----------------------------------------------------------------------- |
+| `addressId`      | UUID     | Delivery address                                                        |
+| `stores`         | array    | Up to 10 entries: `storeId` (required), `included`, `fleetTypeId`, `urgency`, `deliveryDate` (`YYYY-MM-DD` or `null`), `deliverySlot` (`HH:MM - HH:MM`, at least 1 hour, or `null`), `deliveryNotes` (max 500) |
+| `promoCodes`     | string[] | Replaces the set: at most 1 platform code and 1 store code per store    |
+| `useWelcomeGift` | boolean  | Apply the welcome gift                                                  |
+
+The priced session is returned. Errors: `CHECKOUT_SESSION_EXPIRED` 410, `CHECKOUT_SESSION_STATE` 409 (not a draft).
+
+## Confirm and pay
+
+**`POST /v2/checkout-sessions/{id}/confirm`** — rate limit 20 per minute. Returns `200`.
+
+| Field                     | Type   | Required | Description                                                                             |
+| ------------------------- | ------ | -------- | --------------------------------------------------------------------------------------- |
+| `payment.method`          | enum   | Yes      | `WALLET` or `HOSTED`                                                                    |
+| `expectedTotalMinor`      | string | Yes\*    | The total you showed (`totals.total.amountMinor`). \*Required unless `expectedChargeMinor` is sent |
+| `expectedChargeMinor`     | string | No       | The charge you showed (`charge.amountMinor`); when sent, `TOTAL_CHANGED` compares against it |
+
+Everything is re-priced on the server. If the total differs from what you sent you get `TOTAL_CHANGED`; show the new total and confirm again.
+
+- `WALLET`: your account's wallets are debited now, one debit per order. The session becomes `PAID`.
+- `HOSTED`: one provider checkout for the session total. The session is `AWAITING_PAYMENT`; send the payer to `payment.hosted.checkoutUrl`. If starting the payment fails transiently the response is `503 PAYMENT_START_FAILED`: retry with the same key and body.
+- A total of exactly 0 is placed as `WALLET` with no debit.
+
+Webhooks follow: `checkout.paid`, `order.created`, `payment.succeeded`.
+
+Errors: `CHECKOUT_SESSION_NOT_FOUND` 404, `CHECKOUT_SESSION_EXPIRED` 410, `CHECKOUT_SESSION_STATE` 409, `CONCURRENT_REQUEST` 429, `SETUP_REQUIRED` 403 (`details.missing`), `NO_STORE_INCLUDED`, `TOTAL_CHANGED`, `INSUFFICIENT_BALANCE`, `INSUFFICIENT_STOCK`, `PRODUCT_UNAVAILABLE`, `PROMO_INVALID`, `DELIVERY_UNAVAILABLE`, `WELCOME_GIFT_INELIGIBLE`, `PAYMENT_START_FAILED` 503, and the idempotency errors.
+
+## Cancel an order
+
+**`POST /v2/orders/{orderId}/cancel`** — no body, rate limit 20 per minute.
+
+Cancels one store order of one of your checkouts while it awaits store confirmation. Pending payments are failed, successful payments for that order are refunded (to the wallet, or to the card for a card payment), and stock is released. The other orders in the checkout are untouched. The response includes `refund`, the total refunded so far on that order (`null` if nothing was paid).
+
+Errors: `ORDER_NOT_FOUND` 404, `ORDER_NOT_CANCELLABLE` 409 (already final, past the confirmation window, or already cancelled), `RATE_LIMITED` 429.
