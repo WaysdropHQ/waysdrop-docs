@@ -658,6 +658,7 @@ Optional query: `?currency=NGN` — display-only override for `*Display` fields 
 | `urgencyType`                | enum        | No             | `PRIORITY`, `STANDARD`, `SCHEDULED`                                                |
 | `deliveryDate`               | date string | If `SCHEDULED` | e.g. `"2025-06-01"`                                                                |
 | `deliverySlot`               | string      | If `SCHEDULED` | Valid slot for date                                                                |
+| `externalReference`          | string      | No             | Your reconciliation reference (max 128, unique per account). Repeating it returns the stored delivery instead of creating another |
 | `fleetTypeId`                | UUID        | No             | Auto-selected best-fit fleet if omitted                                            |
 | `deliveryFeePayer`           | enum        | No             | `CREATOR` (default), `RECIPIENT`, `SPLIT`                                          |
 | `paymentMethodType`          | enum        | No             | `WALLET` (default) or `CHECKOUT`                                                   |
@@ -1053,6 +1054,12 @@ sequenceDiagram
 
 ---
 
+## Look up a payment by external reference
+
+**`GET /api/payments/by-external-reference/{externalReference}`**
+
+Returns the payment or deposit created with your `externalReference` (or `merchantReference`) on `POST /api/payments/checkout`. This route is not billed and also accepts public keys (`wsp_pub_…`).
+
 ## 13. List deliveries
 
 **`GET /api/deliveries`**
@@ -1067,6 +1074,7 @@ Returns deliveries created with the **current API key** (`delivery.apiKeyId`), n
 | `limit`    | number | No       | Default `20`, max `100`                                 |
 | `search`   | string | No       | Filter by `trackingId` (case-insensitive contains)      |
 | `status`   | enum   | No       | `DeliveryStatus` filter                                 |
+| `externalReference` | string | No | Filter by your external reference (max 128)          |
 | `currency` | string | No       | Display-only override for `*Display` fields on each row |
 
 ### Success — `200 OK`
@@ -1152,6 +1160,7 @@ Optional query: `?currency=NGN` — display / input currency hint for money cont
 | `amount`            | number | Yes      | Amount to collect (positive) in input currency                                            |
 | `customerEmail`     | string | Yes      | Customer email for the hosted checkout session                                            |
 | `merchantReference` | string | No       | Your reconciliation idempotency key — echoed in the webhook                               |
+| `externalReference` | string | No       | Preferred reconciliation reference (alias of `merchantReference`, max 128)                |
 | `currencyCode`      | string | No       | ISO 4217 for the amount. Defaults to corridor wallet currency.                            |
 | `inputCurrency`     | string | No       | Alias of `currencyCode`                                                                   |
 | `callbackUrl`       | string | No       | Post-payment redirect on an **allowed origin**. Server appends `ref=<payment reference>`. |

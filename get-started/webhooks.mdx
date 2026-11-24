@@ -537,3 +537,23 @@ Emitted when a store receives a new order request. The nested `order` object inc
     }
 }
 ```
+
+### refund.processed
+
+Sent when a refund tied to your API key has been processed.
+
+```json
+{
+    "event": "refund.processed",
+    "data": {
+        "deliveryId": "uuid | null",
+        "trackingId": "string | null",
+        "externalReference": "string | null",
+        "refundAmount": "string | null",
+        "refundSource": "string | null",
+        "refundKind": "string | null",
+        "reference": "string | null",
+        "processedAt": "2026-01-24T12:34:56.789Z"
+    }
+}
+```
