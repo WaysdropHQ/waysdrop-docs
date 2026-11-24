@@ -21,7 +21,7 @@ Use `wsp_staging_…` keys on staging. Staging OTP is always **`000000`**. Walle
 3. **Preflight wallet** (optional) — `GET /api/wallet` when using `WALLET`
 4. **Book delivery** — `POST /api/request` with payment flags
 5. **Redirect customer** — hosted checkout URL when `CHECKOUT` + upfront package value
-6. **Listen for webhooks** — `p2p.delivery.created` means paid and matching started
+6. **Listen for webhooks** — `delivery.created` means paid and matching started
 7. **Track** — `GET /api/deliveries/:deliveryId` or `GET /api/deliveries`
 
 ## Payment rails
@@ -47,38 +47,39 @@ See [Money & currencies](/get-started/money-and-currencies) for catalog USD vs n
 
 ## Webhook lifecycle
 
-| Event                          | When                                | Your action                                                     |
-| ------------------------------ | ----------------------------------- | --------------------------------------------------------------- |
-| `p2p.delivery.created`         | After payment satisfied             | Mark order paid; store `deliveryId` / `trackingId`              |
-| `delivery.awaiting.collection` | Courier assigned, heading to pickup | Notify kitchen                                                  |
-| `delivery.collected`           | Package picked up                   | Mark in transit                                                 |
-| `delivery.delivered`           | Delivered                           | Complete order                                                  |
-| `p2p.delivery.cancelled`       | Cancelled                           | Reverse local state; read `refundAmount` / native refund fields |
+| Event                | When                           | Your action                                                |
+| -------------------- | ------------------------------ | ---------------------------------------------------------- |
+| `delivery.created`   | Delivery created and paid      | Mark order paid; store `id` / `trackingId`                 |
+| `delivery.assigned`  | Courier accepted               | Notify kitchen                                             |
+| `delivery.collected` | Package picked up              | Mark collected                                             |
+| `delivery.in_transit`| Courier heading to the drop-off| Mark in transit                                            |
+| `delivery.delivered` | Delivered                      | Complete order                                             |
+| `delivery.cancelled` | Cancelled                      | Reverse local state                                        |
+| `payment.refunded`   | A refund was processed         | Reconcile the refund by `reference`                        |
 
-There is **no** separate refund webhook. Checkout refunds complete asynchronously via the original processor.
-
-Full payloads: [Webhooks](/get-started/webhooks).
+Full payloads, signature verification and retries: [Webhooks](/get-started/webhooks). Create your endpoint with [Webhook endpoints](/api-reference/webhooks).
 
 ## Handler sketch
 
 ```js
-async function handleWaysdropWebhook({ event, data }) {
-    switch (event) {
-        case "p2p.delivery.created":
-            await markOrderPaid(data);
+async function handleWaysdropWebhook(event) {
+    // Verify Waysdrop-Signature against the raw body first, then dedupe on event.id.
+    const delivery = event.data.object;
+    switch (event.type) {
+        case "delivery.created":
+            await markOrderPaid(delivery);
             break;
-        case "delivery.awaiting.collection":
-        case "delivery.request.accepted":
-            await markCourierAssigned(data);
+        case "delivery.assigned":
+            await markCourierAssigned(delivery);
             break;
         case "delivery.collected":
-            await markCollected(data);
+            await markCollected(delivery);
             break;
         case "delivery.delivered":
-            await markDelivered(data);
+            await markDelivered(delivery);
             break;
-        case "p2p.delivery.cancelled":
-            await markCancelled(data);
+        case "delivery.cancelled":
+            await markCancelled(delivery);
             break;
     }
 }

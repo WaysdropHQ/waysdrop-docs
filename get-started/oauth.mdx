@@ -468,7 +468,7 @@ func RefreshTokens(refreshToken string) (*TokenResponse, error) {
 
 | Endpoint                            | Method | Description                        |
 | ----------------------------------- | ------ | ---------------------------------- |
-| `/.well-known/openid-configuration` | GET    | OpenID Connect discovery           |
+| `/oauth/.well-known/openid-configuration` | GET    | OpenID Connect discovery           |
 | `/oauth/authorize`                  | GET    | Start authorization (browser)      |
 | `/oauth/authorize/login`            | POST   | Login during authorize flow        |
 | `/oauth/authorize/consent`          | POST   | Approve or deny consent            |
